@@ -19,7 +19,7 @@ jobs:
         id: docker_meta
         uses: docker/metadata-action@v3
         with:
-          images: ${{ env.REGISTRY }}/bcgov/switchover-agent/switchover-agent
+          images: ${{ env.REGISTRY }}/bcgov/switchover-agent
 
       - name: Set DEPLOY_ID which will deploy a custom deploy to 'dev' environment
         run: |
