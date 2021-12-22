@@ -1,0 +1,33 @@
+{
+  "members": [
+    {
+      "name": "patroni-spilo-0",
+      "role": "leader",
+      "state": "running",
+      "api_url": "http://10.97.24.181:8008/patroni",
+      "host": "10.97.24.181",
+      "port": 5432,
+      "timeline": 2
+    },
+    {
+      "name": "patroni-spilo-1",
+      "role": "replica",
+      "state": "running",
+      "api_url": "http://10.97.23.219:8008/patroni",
+      "host": "10.97.23.219",
+      "port": 5432,
+      "timeline": 2,
+      "lag": 0
+    },
+    {
+      "name": "patroni-spilo-2",
+      "role": "replica",
+      "state": "running",
+      "api_url": "http://10.97.16.53:8008/patroni",
+      "host": "10.97.16.53",
+      "port": 5432,
+      "timeline": 2,
+      "lag": 0
+    }
+  ]
+}

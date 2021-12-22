@@ -1,0 +1,29 @@
+{
+  "state": "running",
+  "postmaster_start_time": "2021-11-09 06:30:54.211 UTC",
+  "role": "master",
+  "server_version": 120002,
+  "cluster_unlocked": false,
+  "xlog": { "location": 3727083520 },
+  "timeline": 2,
+  "replication": [
+    {
+      "usename": "standby",
+      "application_name": "patroni-spilo-1",
+      "client_addr": "10.97.23.219",
+      "state": "streaming",
+      "sync_state": "async",
+      "sync_priority": 0
+    },
+    {
+      "usename": "standby",
+      "application_name": "patroni-spilo-2",
+      "client_addr": "10.97.16.53",
+      "state": "streaming",
+      "sync_state": "async",
+      "sync_priority": 0
+    }
+  ],
+  "database_system_identifier": "7026748834237730892",
+  "patroni": { "version": "1.6.5", "scope": "patroni-spilo" }
+}
