@@ -23,9 +23,10 @@ COPY ./poetry.lock /tmp/
 
 RUN cd /tmp && poetry install --no-root --no-dev
 
-COPY ./src /app
+COPY ./src /app/src
+COPY ./pyproject.toml /app
 
 EXPOSE 8000
 
 ENTRYPOINT ["poetry", "run"]
-CMD ["python", "main.py"]
+CMD ["python", "src/main.py"]
