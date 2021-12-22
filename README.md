@@ -2,6 +2,52 @@
 
 ## Description
 
+Switchover Agent is used in conjunction with a Global Service Load Balancer (GSLB) to monitor and manage the transition of a Patroni Postgres cluster from Standby to Primary during a Disaster Recovery scenario.
+
+The `Switchover Agent` assumes the Primary and Secondary sites are running Active-Passive, and executes on both the Active and Passive sites, connecting to each other through a Secure Websockets connection.
+
+Each `Switchover Agent` observes:
+
+- The DNS resolution on a domain name that is managed by the F5 Global Traffic Manager
+- Switchover Agent Peer connectivity
+- Patroni cluster health
+- State transitions initiated by updates to a Kubernetes Config Map
+
+When the `Switchover Agent` detects failover to the Passive site (DNS is resolving to the Passive site), it will perform the following actions:
+
+**Passive Site:**
+
+- Activate Maintenance messaging
+- Scale up the Health Check Service used by the GSLB
+- Set Patroni as Primary cluster
+- Scale Keycloak up and wait for ready
+- Deactivate Maintenance messaging
+
+**Active Site:**
+
+The Active site is first put into a state of `golddr-primary`, either by enabling the `AUTOMATION`, or by manually updating the Switchover ConfigMap.
+
+- Scale down the Health Check Service used by the GSLB
+
+When some stability has returned, the Active site can transition to `gold-standby`, at which time the `Switchover Agent` will perform the following actions:
+
+- Scale down Patroni cluster
+- Scale down Keycloak
+- Update Patroni to Bootstrap in Standby mode
+- Delete Patroni 0's PVC and ConfigMaps
+- Scale up Patroni 0 (1 Pod)
+- Delete Patroni 1 and 2 PVC and ConfigMaps
+- Scale up Patroni 1 and 2
+- Clear Switchover State transition
+
+And then once the Active site is ready to return to normal operation, the `Switchover Agent` will perform the following actions:
+
+- Activate Maintenance messaging
+- Scale up the Health Check Service used by the GSLB
+- Set Patroni as Primary cluster
+- Scale Keycloak up and wait for ready
+- Deactivate Maintenance messaging
+
 ## Getting Started
 
 ### Dependencies
