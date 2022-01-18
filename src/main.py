@@ -16,8 +16,10 @@ from multiprocessing import Process, Queue
 import random
 
 from config import config
+from is_enabled import is_enabled
 from logic import Logic
 from clients.dns import dns_watch
+from clients.kube_stream import kube_stream_watch
 from clients.kube import kube_watch, restart_deployment
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
@@ -147,7 +149,8 @@ logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
 
-    Process(target=fastapi).start()
+    fastapi_proc = Process(target=fastapi)
+    fastapi_proc.start()
 
 if __name__ == '__main__':
 
@@ -155,80 +158,98 @@ if __name__ == '__main__':
     logic_q = Queue()
     fwd_to_peer_q = Queue()
 
-    logic = Logic()
-
-    t = Process(target=logic.handler, args=(
-        os.environ.get("KUBE_CLUSTER"),
-        os.environ.get("KUBE_NAMESPACE"),
-        os.environ.get("CONFIGMAP_SELECTOR"),
-        os.environ.get("PATRONI_LOCAL_API"),
-        os.environ.get("PY_ENV"),
-        logic_q,
-        fwd_to_peer_q
-    ))
-    processes.append(t)
+    if is_enabled('logic_handler'):
+      logic = Logic()
+      t = Process(target=logic.handler, args=(
+          os.environ.get("KUBE_CLUSTER"),
+          os.environ.get("KUBE_NAMESPACE"),
+          os.environ.get("CONFIGMAP_SELECTOR"),
+          os.environ.get("PATRONI_LOCAL_API"),
+          os.environ.get("PY_ENV"),
+          logic_q,
+          fwd_to_peer_q
+      ))
+      processes.append(t)
 
     #t = Process(target=prom_server)
     # processes.append(t)
 
-    t = Process(target=dns_watch, args=(
-        os.environ.get("GSLB_DOMAIN"),
-        logic_q
-    ))
-    processes.append(t)
+    if is_enabled('dns_watch'):
+      t = Process(target=dns_watch, args=(
+          os.environ.get("GSLB_DOMAIN"),
+          logic_q
+      ))
+      processes.append(t)
 
-    t = Process(target=kube_watch, args=(
-        os.environ.get("KUBE_NAMESPACE"),
-        'configmap',
-        os.environ.get("CONFIGMAP_SELECTOR"),
-        os.environ.get("PY_ENV"),
-        logic_q
-    ))
-    processes.append(t)
+    if is_enabled('kube_watch'):
+      t = Process(target=kube_watch, args=(
+          os.environ.get("KUBE_NAMESPACE"),
+          'configmap',
+          os.environ.get("CONFIGMAP_SELECTOR"),
+          os.environ.get("PY_ENV"),
+          logic_q
+      ))
+      processes.append(t)
 
-    t = Process(target=kube_watch, args=(
-        os.environ.get("KUBE_NAMESPACE"),
-        'statefulset',
-        config.get('statefulset_keycloak_label_selector'),
-        os.environ.get("PY_ENV"),
-        logic_q
-    ))
-    processes.append(t)
+    if is_enabled('kube_watch'):
+      t = Process(target=kube_watch, args=(
+          os.environ.get("KUBE_NAMESPACE"),
+          'statefulset',
+          config.get('statefulset_keycloak_label_selector'),
+          os.environ.get("PY_ENV"),
+          logic_q
+      ))
+      processes.append(t)
 
-    t = Process(target=peer_server, args=(
-        os.environ.get("TLS_CA"),
-        os.environ.get("TLS_LOCAL_CRT"),
-        os.environ.get("TLS_LOCAL_KEY"),
-        config.get('wss_server_host'),
-        config.get('wss_server_port'),
-        logic_q))
-    processes.append(t)
+    if is_enabled('tekton_watch'):
+      t = Process(target=kube_stream_watch, args=(
+          os.environ.get("KUBE_TEKTON_NAMESPACE"),
+          'tekton',
+          config.get('tekton_label_selector'),
+          os.environ.get("PY_ENV"),
+          logic_q
+      ))
+      processes.append(t)
 
-    t = Process(target=peer_client, args=(
-        os.environ.get("TLS_CA"),
-        os.environ.get("TLS_LOCAL_CRT"),
-        os.environ.get("TLS_LOCAL_KEY"),
-        os.environ.get("PEER_HOST"),
-        os.environ.get("PEER_PORT"),
-        logic_q
-    ))
-    processes.append(t)
 
-    t = Process(target=peer_client_fwd, args=(
-        os.environ.get("TLS_CA"),
-        os.environ.get("TLS_LOCAL_CRT"),
-        os.environ.get("TLS_LOCAL_KEY"),
-        os.environ.get("PEER_HOST"),
-        os.environ.get("PEER_PORT"),
-        fwd_to_peer_q
-    ))
-    processes.append(t)
+    if is_enabled('peer_server'):
+      t = Process(target=peer_server, args=(
+          os.environ.get("TLS_CA"),
+          os.environ.get("TLS_LOCAL_CRT"),
+          os.environ.get("TLS_LOCAL_KEY"),
+          config.get('wss_server_host'),
+          config.get('wss_server_port'),
+          logic_q))
+      processes.append(t)
 
-    t = Process(target=patroni_worker, args=(
-        os.environ.get("PATRONI_LOCAL_API"),
-        logic_q
-    ))
-    processes.append(t)
+    if is_enabled('peer_client'):
+      t = Process(target=peer_client, args=(
+          os.environ.get("TLS_CA"),
+          os.environ.get("TLS_LOCAL_CRT"),
+          os.environ.get("TLS_LOCAL_KEY"),
+          os.environ.get("PEER_HOST"),
+          os.environ.get("PEER_PORT"),
+          logic_q
+      ))
+      processes.append(t)
+
+    if is_enabled('peer_client_fwd'):
+      t = Process(target=peer_client_fwd, args=(
+          os.environ.get("TLS_CA"),
+          os.environ.get("TLS_LOCAL_CRT"),
+          os.environ.get("TLS_LOCAL_KEY"),
+          os.environ.get("PEER_HOST"),
+          os.environ.get("PEER_PORT"),
+          fwd_to_peer_q
+      ))
+      processes.append(t)
+
+    if is_enabled('patroni_worker'):
+      t = Process(target=patroni_worker, args=(
+          os.environ.get("PATRONI_LOCAL_API"),
+          logic_q
+      ))
+      processes.append(t)
 
     try:
         for process in processes:
@@ -242,4 +263,7 @@ if __name__ == '__main__':
 
     for process in processes:
         process.terminate()
+    fastapi_proc.terminate()
+
     logger.error("All terminated.")
+    

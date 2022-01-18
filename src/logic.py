@@ -50,8 +50,17 @@ class Logic:
         while True:
             try:
                 item = _q.get()
-                logger.info(f'logic {item}')
+                # logger.info(f'logic {item}')
                 self.METRIC.labels(resource="logic", state="info").inc()
+
+                if item['event'] == 'kube_stream':
+                    spec = item['data']['object']
+                    mdnm = spec['metadata']['name']
+                    logger.warn("Name = %s" % mdnm)
+                    logger.warn("Event ID = %s" % spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid'])
+                    logger.warn("Params = %s" % spec['spec']['params'])
+                    logger.warn("Status Type = %s" % spec['status']['conditions']['reason'])
+                    logger.warn("Status Status = %s" % spec['status']['conditions']['status'])
 
                 if item['event'] == 'keycloak':
                     self.maintenance_off(namespace, py_env)

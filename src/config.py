@@ -19,9 +19,10 @@ config = dict(
     configmap_switchover='switchover-state',
     configmap_patroni_replicas=3,
     configmap_patroni_env_vars='patroni-spilo-env-vars',
+    tekton_label_selector='triggers.tekton.dev/eventlistener=aps-cicd-ocp-tkn-terraform-pipeline-git-trigger',
     automation_enabled=os.environ.get('AUTOMATION_ENABLED') == 'true',
     patroni_peer_host=os.environ.get("PATRONI_PEER_HOST"),
     patroni_peer_port=os.environ.get("PATRONI_PEER_PORT"),
     kube_health_namespace=os.environ.get("KUBE_HEALTH_NAMESPACE"),
-    maintenance_url=os.environ.get("MAINTENANCE_URL")
+    maintenance_url=os.environ.get("MAINTENANCE_URL"),
 )

@@ -13,39 +13,38 @@ Each `Switchover Agent` observes:
 - Patroni cluster health
 - State transitions initiated by updates to a Kubernetes Config Map
 
-When the `Switchover Agent` detects failover to the Passive site (DNS is resolving to the Passive site), it will perform the following actions:
+When the `Switchover Agent` detects the Active site traffic is down (DNS is resolving to the Passive site or no DNS), it will perform the following actions:
 
 **Passive Site:**
 
-- Activate Maintenance messaging
-- Scale up the Health Check Service used by the GSLB
 - Set Patroni as Primary cluster
-- Scale Keycloak up and wait for ready
+- Scale up the Health Check Service used by the GSLB (if it isn't already)
+- Activate the Maintenance messaging on the API Services Portal
+- Scale Keycloak (and its dependencies) up and wait for ready
 - Deactivate Maintenance messaging
 
 **Active Site:**
 
-The Active site is first put into a state of `golddr-primary`, either by enabling the `AUTOMATION`, or by manually updating the Switchover ConfigMap.
+The Active site is first put into a state of `golddr-primary`, either by enabling the `AUTOMATION`, or by manually updating the Switchover ConfigMap. Transitioning to this state will:
 
 - Scale down the Health Check Service used by the GSLB
 
-When some stability has returned, the Active site can transition to `gold-standby`, at which time the `Switchover Agent` will perform the following actions:
+When some stability has returned, the Active site can be manually transition to `gold-standby`, at which time the `Switchover Agent` will perform the following actions:
 
 - Scale down Patroni cluster
-- Scale down Keycloak
+- Scale down Keycloak (and its dependencies)
 - Update Patroni to Bootstrap in Standby mode
 - Delete Patroni 0's PVC and ConfigMaps
 - Scale up Patroni 0 (1 Pod)
 - Delete Patroni 1 and 2 PVC and ConfigMaps
 - Scale up Patroni 1 and 2
-- Clear Switchover State transition
 
 And then once the Active site is ready to return to normal operation, the `Switchover Agent` will perform the following actions:
 
-- Activate Maintenance messaging
-- Scale up the Health Check Service used by the GSLB
 - Set Patroni as Primary cluster
-- Scale Keycloak up and wait for ready
+- Scale up the Health Check Service used by the GSLB
+- Activate the Maintenance messaging on the API Services Portal
+- Scale Keycloak (and its dependencies) up and wait for ready
 - Deactivate Maintenance messaging
 
 ## Getting Started
@@ -94,6 +93,7 @@ poetry run python src/main.py
 | KUBE_CLUSTER             | The cluster (gold, golddr) that the switchover service is running in  |
 | KUBE_NAMESPACE           | Namespace where the configmap is located                              |
 | KUBE_HEALTH_NAMESPACE    | Namespace where the health API and other continuous delivery services |
+| KUBE_TEKTON_NAMESPACE    | Namespace that the Tekton pipelines are run in                        |
 | CONFIGMAP_SELECTOR       | Label selector for the configmap that controls state                  |
 | GSLB_DOMAIN              | Domain name that is used to resolve DNS load balancing                |
 | PATRONI_PEER_HOST        | Host of the peer patroni cluster                                      |
@@ -101,8 +101,26 @@ poetry run python src/main.py
 | PATRONI_LOCAL_API        | URL of the Patroni Control API                                        |
 | MAINTENANCE_URL          | Endpoint for the PUT /maintenance/:status and GET /maintenance        |
 | PROMETHEUS_MULTIPROC_DIR | Prometheus transient collector db                                     |
+| PROCESS_LIST             | Comma-delimited list of processes to start.                           |
+|                          | Values:                                                               |
+|                          | - logic_handler,dns_watch,                                            |
+|                          | - peer_server,peer_client,peer_client_fwd,                            |
+|                          | - kube_watch,patroni_worker,                                          |
 
-Default ports:
+**Processes:**
+
+| Process         | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| logic_handler   | Evaluates the observations and executes actions based on rules  |
+| dns_watch       | Observes the Domain Name Resolution for GSLB managed domain     |
+| patroni_worker  | Observes state changes in the Patroni Postgres cluster          |
+| kube_watch      | Observes the Switchover Agent ConfigMap                         |
+| tekton_watch    | Observes the Tekton Pipeline Runs                               |
+| peer_server     | Observes events from the Peer Switchover Agent                  |
+| peer_client     | Establishes a Websocket connection to the Peer Switchover Agent |
+| peer_client_fwd | Forwards specific events to the Peer Switchover Agent           |
+
+**Default ports:**
 
 - `8000` : Port for the healthcheck `/health` endpoint and Prometheus `/metrics`
 - `8765` :
@@ -306,6 +324,8 @@ env:
     value: ${var.namespace}
   KUBE_HEALTH_NAMESPACE:
     value: ${var.tools_namespace}
+  KUBE_TEKTON_NAMESPACE:
+    value: ${var.tools_namespace}
   CONFIGMAP_SELECTOR:
     value: app=switchover,name=switchover-config
   AUTOMATION_ENABLED:
@@ -330,7 +350,8 @@ env:
     value: 'http://bcgov-aps-portal-generic-api'
   LOG_LEVEL:
     value: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'
-
+  PROCESS_LIST:
+    value: 'logic_handler,dns_watch,kube_watch,peer_server,peer_client,peer_client_fwd,patroni_worker'
 EOT
   ]
 }
