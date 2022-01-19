@@ -1,10 +1,11 @@
-from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 import logging
 import datetime
 import traceback
 import sys
 import time
-from clients.kube import get_configmap, update_configmap
+from clients.tekton import trigger_tekton_build
+from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
+from clients.kube import get_configmap, update_configmap, restart_deployment, patch_secret
 from clients.patroni import set_readonly_cluster, set_primary_cluster
 from clients.maintenance import set_maintenance
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
@@ -40,6 +41,9 @@ class WaitFor:
 class Logic:
     peer = "unknown"
     patroni = dict(control='unknown', concerns=[], leader=dict(role='unknown'))
+    pipeline = dict(event_id=None, start_ts=None,
+                    end_ts=None, maintenance=False)
+
     triggers = []
     PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
                        ['release', 'state'])
@@ -47,13 +51,6 @@ class Logic:
                      ['resource', 'state'])
     GAUGE = Gauge('switchover_logic_gauge', 'Switchover Logic Point in Time',
                   ['resource'])
-
-    def pick_params(self, list, keys):
-        pairs = {}
-        for item in list:
-            if item['name'] in keys:
-                pairs[item['name']] = item['value']
-        return pairs
 
     def handler(self, cluster: str, namespace: str, label_selector: str, patroni_local_url: str, py_env: str, _q, fwd_to_peer_q):
         while True:
@@ -64,12 +61,14 @@ class Logic:
 
                 if item['event'] == 'kube_stream':
                     spec = item['data']['object']
+                    kind = spec['kind']
 
-                    if spec['kind'] == 'PipelineRun':
+                    if kind == 'PipelineRun':
                         mdnm = spec['metadata']['name']
+                        event_id = spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid']
                         logger.debug("   name  = %s" % mdnm)
                         logger.debug(
-                            "   event = %s" % spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid'])
+                            "   event = %s" % event_id)
                         params = self.pick_params(spec['spec']['params'], [
                             "git-release-branch", "release-namespace"])
                         for key in params.keys():
@@ -82,16 +81,30 @@ class Logic:
                                          spec['status']['conditions'][0]['reason'])
                             logger.debug("   status = %s" %
                                          spec['status']['conditions'][0]['status'])
+                            logger.debug("   messag = %s" %
+                                         spec['status']['conditions'][0]['message'])
 
-                        self.PIPELINE.labels(
-                            release=params['release-namespace'], state=status_reason).inc()
+                            if self.pipeline['event_id'] == event_id and (status_reason == "Succeeded" or status_reason == "Failed"):
+                                logger.info("End State for Pipeline!")
+                                logger.info("Tekton Start: %s" %
+                                            self.pipeline['start_ts'])
+                                logger.info("Tekton   End: %s" %
+                                            datetime.datetime.now())
+                                # turn off maintenance
+                                if self.pipeline['maintenance']:
+                                    self.maintenance_on(namespace, py_env)
+                                else:
+                                    self.maintenance_off(namespace, py_env)
+                                self.pipeline = dict(
+                                    event_id=None, start_ts=None, end_ts=None)
+
+                        if item['data']['type'] != "ADDED":
+                            self.PIPELINE.labels(
+                                release=params['release-namespace'], state=status_reason).inc()
 
                         # Status Reason/Status : Running, Unknown
                         # Status Reason/Status : Succeeded, True
                         # Status Reason/Status : Failed, False
-
-                if item['event'] == 'keycloak':
-                    self.maintenance_off(namespace, py_env)
 
                 if item['event'] == 'patroni':
                     self.patroni = item
@@ -204,6 +217,8 @@ class Logic:
                                     resource="logic", state="warning").inc()
 
                             elif cluster == config.get('active_site'):
+                                self.set_in_recovery(False, py_env)
+
                                 # TODO: Do a: is_peer_happy_to_proceed()
                                 self.initiate_primary(
                                     namespace, patroni_local_url, py_env)
@@ -213,6 +228,8 @@ class Logic:
 
                                 next_state = transition
                             elif cluster == config.get('passive_site'):
+                                self.set_in_recovery(False, py_env)
+
                                 work = self.initiate_passive_standby(
                                     namespace, patroni_local_url, py_env)
                                 if work is None:
@@ -261,7 +278,10 @@ class Logic:
                                 namespace, next_state, '', py_env)
 
                         elif transition == 'golddr-primary':
+
                             if cluster == config.get('active_site'):
+                                self.set_in_recovery(True, py_env)
+
                                 self.initiate_down(
                                     namespace, patroni_local_url, py_env)
 
@@ -273,6 +293,8 @@ class Logic:
                                 next_state = transition
 
                             elif cluster == config.get('passive_site'):
+                                self.set_in_recovery(True, py_env)
+
                                 self.initiate_primary(
                                     namespace, patroni_local_url, py_env)
                                 next_state = transition
@@ -301,6 +323,15 @@ class Logic:
         scale(config.get('kube_health_namespace'), 'deployment',
               config.get('deployment_health_api'), 0, py_env)
 
+    # Transition to active-passive or golddr_primary involves
+    # the following for the Primary site:
+    # - set is_recovery (done before this is called)
+    # - ensure maintenance mode is on
+    # - ensure health api is scaled up
+    # - enable patroni as master
+    # - trigger deployment (will scale up keycloak, Kong Control Plane)
+    # - wait for deployment to complete (Tekton Event ID)
+    #   - then turn maintenance mode off
     def initiate_primary(self, namespace: str, patroni_local_url: str, py_env: str):
         logger.info("initiate_primary")
 
@@ -318,14 +349,14 @@ class Logic:
             self.update_patroni_spilo_env_vars(
                 namespace, False, py_env)
 
-        # scale_and_wait(namespace, 'deployment',
-        #   config.get('deployment_kong_control_plane'),
-        #   config.get('deployment_kong_control_plane_label_selector'),
-        #   2, py_env)
-
-        scale(namespace, 'statefulset',
-              config.get('statefulset_keycloak'),
-              1, py_env)
+        pipeline_event = trigger_tekton_build(config.get("tekton_trigger_url"),
+                                              config.get("tekton_github_repo"),
+                                              config.get("tekton_github_ref"),
+                                              config.get("tekton_github_hmac_signature"))
+        logger.info("Triggered tekton event %s" % pipeline_event['eventID'])
+        self.pipeline['event_id'] = pipeline_event['eventID']
+        self.pipeline['start_ts'] = datetime.datetime.now()
+        self.pipeline['maintenance'] = False
 
     def initiate_active_standby(self, namespace: str, patroni_local_url: str, py_env: str):
         scale(config.get('kube_health_namespace'), 'deployment',
@@ -339,8 +370,18 @@ class Logic:
         return self.initiate_standby(namespace, patroni_local_url,
                                      py_env, 'active-passive')
 
+    # Transition to active-passive or gold_standby involves
+    # the following for the Standby site:
+    # - set is_recovery (done before this is called)
+    # - ensure health api is scaled appropriately (done before this is called)
+    # - ensure maintenance mode is on
+    # - enable patroni as standby
+    # - trigger deployment (will scale down keycloak, Kong Control Plane)
+    # - wait for deployment to complete (Tekton Event ID)
     def initiate_standby(self, namespace: str, patroni_local_url: str, py_env: str, final_state: str):
         logger.info("initiate_standby")
+
+        self.maintenance_on(namespace, py_env)
 
         if self.patroni['control'] == 'up' and len(self.patroni['concerns']) == 0 and self.patroni['leader']['role'] == 'standby_leader':
             logger.warn(
@@ -349,14 +390,15 @@ class Logic:
         else:
             self.triggers.clear()
 
-            # scale_and_wait(namespace, 'deployment',
-            #                config.get('deployment_kong_control_plane'),
-            #                config.get('deployment_kong_control_plane_label_selector'),
-            #                0, py_env)
-
             scale_and_wait(namespace, 'statefulset',
                            config.get('statefulset_patroni'),
                            "app=%s" % config.get('statefulset_patroni'),
+                           0, py_env)
+
+            scale_and_wait(namespace, 'deployment',
+                           config.get('deployment_kong_control_plane'),
+                           config.get(
+                               'deployment_kong_control_plane_label_selector'),
                            0, py_env)
 
             scale_and_wait(namespace, 'statefulset',
@@ -388,6 +430,15 @@ class Logic:
                        'patroni-spilo', "app=patroni-spilo", 3, py_env)
 
         self.triggers.clear()
+
+        pipeline_event = trigger_tekton_build(config.get("tekton_trigger_url"),
+                                              config.get("tekton_github_repo"),
+                                              config.get("tekton_github_ref"),
+                                              config.get("tekton_github_hmac_signature"))
+        logger.info("Triggered tekton event %s" % pipeline_event['eventID'])
+        self.pipeline['event_id'] = pipeline_event['eventID']
+        self.pipeline['start_ts'] = datetime.datetime.now()
+        self.pipeline['maintenance'] = True
 
         self.update_switchover_state(
             namespace, final_state, '', py_env)
@@ -426,12 +477,10 @@ class Logic:
 
     def maintenance_on(self, namespace: str, py_env: str):
         logger.debug("MAINTENANCE TURNING ON..")
-        # Scale maintenance page to 2
-        scale_and_wait(namespace, 'deployment',
-                       config.get('deployment_keycloak_maintenance_page'),
-                       config.get(
-                           'deployment_keycloak_maintenance_page_label_selector'),
-                       2, py_env)
+
+        # Cycle maintenance page (clears out any connections there might be)
+        restart_deployment(namespace, config.get(
+            'deployment_keycloak_maintenance_page'), py_env)
 
         # Switch keycloak service to maintenance
         keycloak_service_block()
@@ -443,12 +492,10 @@ class Logic:
 
     def maintenance_off(self, namespace: str, py_env: str):
         logger.debug("MAINTENANCE TURNING OFF..")
-        # Scale maintenance page to 0
-        scale_and_wait(namespace, 'deployment',
-                       config.get('deployment_keycloak_maintenance_page'),
-                       config.get(
-                           'deployment_keycloak_maintenance_page_label_selector'),
-                       0, py_env)
+
+        # Cycle maintenance page (clears out any connections there might be)
+        restart_deployment(namespace, config.get(
+            'deployment_keycloak_maintenance_page'), py_env)
 
         # Switch keycloak service to keycloak
         keycloak_service_flow()
@@ -457,3 +504,18 @@ class Logic:
         set_maintenance(config.get('maintenance_url'), False)
 
         logger.debug("MAINTENANCE OFF - OK")
+
+    def set_in_recovery(self, state: bool, py_env: str):
+        if state:
+            spec = {"in_recovery": "true"}
+        else:
+            spec = {"in_recovery": "false"}
+        patch_secret(config.get("tekton_namespace"),
+                     config.get("tekton_terraform_tfvars"), py_env, spec)
+
+    def pick_params(self, list, keys):
+        pairs = {}
+        for item in list:
+            if item['name'] in keys:
+                pairs[item['name']] = item['value']
+        return pairs

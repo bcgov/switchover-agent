@@ -94,6 +94,11 @@ poetry run python src/main.py
 | KUBE_NAMESPACE           | Namespace where the configmap is located                              |
 | KUBE_HEALTH_NAMESPACE    | Namespace where the health API and other continuous delivery services |
 | KUBE_TEKTON_NAMESPACE    | Namespace that the Tekton pipelines are run in                        |
+| TEKTON_URL               | Trigger URL for starting a deployment using Tekton Pipelines          |
+| TEKTON_GITHUB_REPO       | The github repository that holds the Terraform configuration          |
+| TEKTON_GITHUB_REF        | The github reference passed in the Trigger payload                    |
+| TEKTON_HMAC_SECRET       | The HMAC secret used to generate a Signature on the Trigger payload   |
+| TERRAFORM_TFVARS         | The Terraform configuration where the in_recovery variable is patched |
 | CONFIGMAP_SELECTOR       | Label selector for the configmap that controls state                  |
 | GSLB_DOMAIN              | Domain name that is used to resolve DNS load balancing                |
 | PATRONI_PEER_HOST        | Host of the peer patroni cluster                                      |
@@ -102,12 +107,10 @@ poetry run python src/main.py
 | MAINTENANCE_URL          | Endpoint for the PUT /maintenance/:status and GET /maintenance        |
 | PROMETHEUS_MULTIPROC_DIR | Prometheus transient collector db                                     |
 | PROCESS_LIST             | Comma-delimited list of processes to start.                           |
-|                          | Values:                                                               |
-|                          | - logic_handler,dns_watch,                                            |
-|                          | - peer_server,peer_client,peer_client_fwd,                            |
-|                          | - kube_watch,patroni_worker,                                          |
+| LOG_LEVEL                | Comma-delimited list of categories and their log levels               |
+|                          | Example: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'       |
 
-**Processes:**
+**PROCESS_LIST values:**
 
 | Process         | Description                                                     |
 | --------------- | --------------------------------------------------------------- |
@@ -351,7 +354,7 @@ env:
   LOG_LEVEL:
     value: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'
   PROCESS_LIST:
-    value: 'logic_handler,dns_watch,kube_watch,peer_server,peer_client,peer_client_fwd,patroni_worker'
+    value: 'logic_handler,dns_watch,kube_watch,tekton_watch,peer_server,peer_client,peer_client_fwd,patroni_worker'
 EOT
   ]
 }
