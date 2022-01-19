@@ -41,26 +41,54 @@ class Logic:
     peer = "unknown"
     patroni = dict(control='unknown', concerns=[], leader=dict(role='unknown'))
     triggers = []
+    PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
+                       ['release', 'state'])
     METRIC = Counter('switchover_logic', 'Switchover Logic',
                      ['resource', 'state'])
     GAUGE = Gauge('switchover_logic_gauge', 'Switchover Logic Point in Time',
                   ['resource'])
 
+    def pick_params(self, list, keys):
+        pairs = {}
+        for item in list:
+            if item['name'] in keys:
+                pairs[item['name']] = item['value']
+        return pairs
+
     def handler(self, cluster: str, namespace: str, label_selector: str, patroni_local_url: str, py_env: str, _q, fwd_to_peer_q):
         while True:
             try:
                 item = _q.get()
-                # logger.info(f'logic {item}')
+                logger.info(f'logic {item["event"]}')
                 self.METRIC.labels(resource="logic", state="info").inc()
 
                 if item['event'] == 'kube_stream':
                     spec = item['data']['object']
-                    mdnm = spec['metadata']['name']
-                    logger.warn("Name = %s" % mdnm)
-                    logger.warn("Event ID = %s" % spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid'])
-                    logger.warn("Params = %s" % spec['spec']['params'])
-                    logger.warn("Status Type = %s" % spec['status']['conditions']['reason'])
-                    logger.warn("Status Status = %s" % spec['status']['conditions']['status'])
+
+                    if spec['kind'] == 'PipelineRun':
+                        mdnm = spec['metadata']['name']
+                        logger.debug("   name  = %s" % mdnm)
+                        logger.debug(
+                            "   event = %s" % spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid'])
+                        params = self.pick_params(spec['spec']['params'], [
+                            "git-release-branch", "release-namespace"])
+                        for key in params.keys():
+                            logger.debug("   param  %-20s = %s" %
+                                         (key, params[key]))
+                        status_reason = "Undefined"
+                        if 'status' in spec and 'conditions' in spec['status']:
+                            status_reason = spec['status']['conditions'][0]['reason']
+                            logger.debug("   reason = %s" %
+                                         spec['status']['conditions'][0]['reason'])
+                            logger.debug("   status = %s" %
+                                         spec['status']['conditions'][0]['status'])
+
+                        self.PIPELINE.labels(
+                            release=params['release-namespace'], state=status_reason).inc()
+
+                        # Status Reason/Status : Running, Unknown
+                        # Status Reason/Status : Succeeded, True
+                        # Status Reason/Status : Failed, False
 
                 if item['event'] == 'keycloak':
                     self.maintenance_off(namespace, py_env)
@@ -290,16 +318,14 @@ class Logic:
             self.update_patroni_spilo_env_vars(
                 namespace, False, py_env)
 
-        # scale_and_wait(namespace, 'deployment', 
-        #   config.get('deployment_kong_control_plane'), 
-        #   config.get('deployment_kong_control_plane_label_selector'), 
+        # scale_and_wait(namespace, 'deployment',
+        #   config.get('deployment_kong_control_plane'),
+        #   config.get('deployment_kong_control_plane_label_selector'),
         #   2, py_env)
 
         scale(namespace, 'statefulset',
-                        config.get('statefulset_keycloak'), 
-                        1, py_env)
-
-
+              config.get('statefulset_keycloak'),
+              1, py_env)
 
     def initiate_active_standby(self, namespace: str, patroni_local_url: str, py_env: str):
         scale(config.get('kube_health_namespace'), 'deployment',
@@ -324,17 +350,17 @@ class Logic:
             self.triggers.clear()
 
             # scale_and_wait(namespace, 'deployment',
-            #                config.get('deployment_kong_control_plane'), 
+            #                config.get('deployment_kong_control_plane'),
             #                config.get('deployment_kong_control_plane_label_selector'),
             #                0, py_env)
 
             scale_and_wait(namespace, 'statefulset',
-                           config.get('statefulset_patroni'), 
-                           "app=%s" % config.get('statefulset_patroni'), 
+                           config.get('statefulset_patroni'),
+                           "app=%s" % config.get('statefulset_patroni'),
                            0, py_env)
 
             scale_and_wait(namespace, 'statefulset',
-                           config.get('statefulset_keycloak'), 
+                           config.get('statefulset_keycloak'),
                            config.get('statefulset_keycloak_label_selector'),
                            0, py_env)
 
@@ -402,9 +428,10 @@ class Logic:
         logger.debug("MAINTENANCE TURNING ON..")
         # Scale maintenance page to 2
         scale_and_wait(namespace, 'deployment',
-                        config.get('deployment_keycloak_maintenance_page'), 
-                        config.get('deployment_keycloak_maintenance_page_label_selector'), 
-                        2, py_env)
+                       config.get('deployment_keycloak_maintenance_page'),
+                       config.get(
+                           'deployment_keycloak_maintenance_page_label_selector'),
+                       2, py_env)
 
         # Switch keycloak service to maintenance
         keycloak_service_block()
@@ -414,14 +441,14 @@ class Logic:
 
         logger.debug("MAINTENANCE ON - OK")
 
-
     def maintenance_off(self, namespace: str, py_env: str):
         logger.debug("MAINTENANCE TURNING OFF..")
         # Scale maintenance page to 0
         scale_and_wait(namespace, 'deployment',
-                        config.get('deployment_keycloak_maintenance_page'), 
-                        config.get('deployment_keycloak_maintenance_page_label_selector'), 
-                        0, py_env)
+                       config.get('deployment_keycloak_maintenance_page'),
+                       config.get(
+                           'deployment_keycloak_maintenance_page_label_selector'),
+                       0, py_env)
 
         # Switch keycloak service to keycloak
         keycloak_service_flow()
