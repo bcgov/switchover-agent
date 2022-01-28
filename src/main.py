@@ -27,6 +27,7 @@ from clients.keycloak import keycloak_service_block, keycloak_service_flow
 from clients.prom import prom_server
 from clients.maintenance import set_maintenance
 from clients.patroni import patroni_worker, set_readonly_cluster, set_primary_cluster, set_standby_cluster
+from transitions.initiate_down import rollback_active_down
 from peers.server import peer_server
 from peers.client import peer_client
 from peers.client_fwd import peer_client_fwd
@@ -50,6 +51,12 @@ def prom_metrics():
 @app.get("/health")
 def check_health():
     return {"status": "up"}
+
+
+@app.put("/rollback-active-down")
+def rollback_active_down():
+    rollback_active_down(os.environ.get("PY_ENV"))
+    return {"done": "true"}
 
 
 @app.get("/set-primary")
