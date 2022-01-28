@@ -9,32 +9,40 @@ from config import config
 logger = logging.getLogger(__name__)
 
 
-def initiate_active_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
-    set_in_recovery(False, py_env)
-    return initiate_primary(logic_context, namespace, patroni_local_url, py_env)
-
-
-def initiate_passive_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
-    set_in_recovery(True, py_env)
-    return initiate_primary(logic_context, namespace, patroni_local_url, py_env)
-
-
 # Transition to active-passive or golddr_primary involves
 # the following for the Primary site:
-# - set is_recovery (done before this is called)
+# - set is_recovery
 # - ensure maintenance mode is on
 # - ensure health api is scaled up
 # - enable patroni as master
 # - trigger deployment (will scale up keycloak, Kong Control Plane)
 # - wait for deployment to complete (Tekton Event ID)
 #   - then turn maintenance mode off
-def initiate_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
-    logger.info("initiate_primary")
+
+def initiate_active_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+    set_in_recovery(False, py_env)
 
     maintenance_on(namespace, py_env)
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
+
+    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
+
+
+def initiate_passive_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+    set_in_recovery(True, py_env)
+
+    maintenance_on(namespace, py_env)
+
+    scale(config.get('kube_health_namespace'), 'deployment',
+          config.get('deployment_health_api'), 2, py_env)
+
+    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
+
+
+def deploy_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+    logger.info("initiate_primary")
 
     patroni = logic_context.patroni
 

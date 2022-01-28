@@ -1,13 +1,8 @@
 import logging
 import logging
-import datetime
 from clients.kube import scale
-from clients.patroni import set_readonly_cluster, set_primary_cluster
-from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
-from clients.tekton import trigger_tekton_build
-from transitions.wait_for import WaitFor
-from transitions.shared import maintenance_on, set_in_recovery, set_in_maintenance, update_patroni_spilo_env_vars
-from transitions.initiate_primary import initiate_primary
+from transitions.shared import set_in_maintenance
+from transitions.initiate_primary import deploy_primary
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -23,4 +18,4 @@ def initiate_passive_maintenance(logic_context, namespace: str, patroni_local_ur
     set_in_maintenance(True, py_env)
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
-    return initiate_primary(logic_context, namespace, patroni_local_url, py_env)
+    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
