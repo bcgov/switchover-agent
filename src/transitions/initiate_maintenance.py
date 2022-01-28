@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # - intiate work to make passive site detached and "live"
 
 
-def initiate_passive_maintenance(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def initiate_passive_maintenance(logic_context, patroni_local_url: str, py_env: str):
     set_in_maintenance(True, py_env)
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
-    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
+    return deploy_primary(logic_context, patroni_local_url, py_env)

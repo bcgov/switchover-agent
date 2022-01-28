@@ -90,8 +90,9 @@ poetry run python src/main.py
 | PEER_HOST                | Peer Host                                                             |
 | PEER_PORT                | Peer Port                                                             |
 | AUTOMATION_ENABLED       | Perform automatic failover based on feedback from the GSLB            |
+| ENVIRONMENT              | `dev`, `test`, `prod` - where the solution is deployed                |
 | KUBE_CLUSTER             | The cluster (gold, golddr) that the switchover service is running in  |
-| KUBE_NAMESPACE           | Namespace where the configmap is located                              |
+| KUBE_NAMESPACE           | Namespace where the solution is deployed (i.e. Patroni, Keycloak)     |
 | KUBE_HEALTH_NAMESPACE    | Namespace where the health API and other continuous delivery services |
 | KUBE_TEKTON_NAMESPACE    | Namespace that the Tekton pipelines are run in                        |
 | TEKTON_URL               | Trigger URL for starting a deployment using Tekton Pipelines          |
@@ -99,7 +100,6 @@ poetry run python src/main.py
 | TEKTON_GITHUB_REF        | The github reference passed in the Trigger payload                    |
 | TEKTON_HMAC_SECRET       | The HMAC secret used to generate a Signature on the Trigger payload   |
 | TERRAFORM_TFVARS         | The Terraform configuration where the in_recovery variable is patched |
-| CONFIGMAP_SELECTOR       | Label selector for the configmap that controls state                  |
 | GSLB_DOMAIN              | Domain name that is used to resolve DNS load balancing                |
 | PATRONI_PEER_HOST        | Host of the peer patroni cluster                                      |
 | PATRONI_PEER_PORT        | Port of the peer patroni cluster                                      |

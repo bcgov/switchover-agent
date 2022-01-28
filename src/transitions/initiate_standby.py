@@ -11,18 +11,18 @@ from config import config
 logger = logging.getLogger(__name__)
 
 
-def initiate_active_standby(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def initiate_active_standby(logic_context, py_env: str):
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
-    return initiate_standby(logic_context, namespace, patroni_local_url,
+    return initiate_standby(logic_context,
                             py_env, 'gold-standby')
 
 
-def initiate_passive_standby(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def initiate_passive_standby(logic_context, py_env: str):
     set_in_recovery(False, py_env)
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
-    return initiate_standby(logic_context, namespace, patroni_local_url,
+    return initiate_standby(logic_context,
                             py_env, 'active-passive')
 
 # Transition to active-passive or gold_standby involves
@@ -35,10 +35,12 @@ def initiate_passive_standby(logic_context, namespace: str, patroni_local_url: s
 # - wait for deployment to complete (Tekton Event ID)
 
 
-def initiate_standby(logic_context, namespace: str, patroni_local_url: str, py_env: str, final_state: str):
+def initiate_standby(logic_context, py_env: str, final_state: str):
     logger.info("initiate_standby")
 
-    maintenance_on(namespace, py_env)
+    maintenance_on(py_env)
+
+    ns = config.get('solution_namespace')
 
     patroni = logic_context.patroni
 
@@ -49,41 +51,41 @@ def initiate_standby(logic_context, namespace: str, patroni_local_url: str, py_e
     else:
         logic_context.clear_triggers()
 
-        scale_and_wait(namespace, 'statefulset',
+        scale_and_wait(ns, 'statefulset',
                        config.get('statefulset_patroni'),
                        "app=%s" % config.get('statefulset_patroni'),
                        0, py_env)
 
-        scale_and_wait(namespace, 'deployment',
+        scale_and_wait(ns, 'deployment',
                        config.get('deployment_kong_control_plane'),
                        config.get(
                            'deployment_kong_control_plane_label_selector'),
                        0, py_env)
 
-        scale_and_wait(namespace, 'statefulset',
+        scale_and_wait(ns, 'statefulset',
                        config.get('statefulset_keycloak'),
                        config.get('statefulset_keycloak_label_selector'),
                        0, py_env)
 
         update_patroni_spilo_env_vars(
-            namespace, True, py_env)
+            True, py_env)
 
-        delete_pvc(namespace, 'storage-volume-patroni-spilo-0', py_env)
-        delete_configmap(namespace, 'patroni-spilo-config', py_env)
-        scale_and_wait(namespace, 'statefulset',
+        delete_pvc(ns, 'storage-volume-patroni-spilo-0', py_env)
+        delete_configmap(ns, 'patroni-spilo-config', py_env)
+        scale_and_wait(ns, 'statefulset',
                        'patroni-spilo', "app=patroni-spilo", 1, py_env)
 
         logger.debug("Adding Future work to be triggered later...")
         return WaitFor().wait_until(logic_context.patroni_has_no_standby_concerns).then_trigger(
-            complete_standby, logic_context, namespace, py_env, final_state)
+            complete_standby, logic_context, ns, py_env, final_state)
 
 
-def complete_standby(logic_context, namespace: str, py_env: str, final_state: str):
+def complete_standby(logic_context, ns: str, py_env: str, final_state: str):
     logger.info("complete_standby starting")
 
-    delete_pvc(namespace, 'storage-volume-patroni-spilo-1', py_env)
-    delete_pvc(namespace, 'storage-volume-patroni-spilo-2', py_env)
-    scale_and_wait(namespace, 'statefulset',
+    delete_pvc(ns, 'storage-volume-patroni-spilo-1', py_env)
+    delete_pvc(ns, 'storage-volume-patroni-spilo-2', py_env)
+    scale_and_wait(ns, 'statefulset',
                    'patroni-spilo', "app=patroni-spilo", 3, py_env)
 
     logic_context.clear_triggers()
@@ -100,4 +102,4 @@ def complete_standby(logic_context, namespace: str, py_env: str, final_state: st
     logic_context.set_pipeline(pipeline)
 
     logic_context.update_switchover_state(
-        namespace, final_state, '', None, py_env)
+        final_state, '', None, py_env)

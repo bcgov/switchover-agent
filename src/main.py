@@ -170,7 +170,7 @@ if __name__ == '__main__':
         t = Process(target=logic.handler, args=(
             os.environ.get("KUBE_CLUSTER"),
             os.environ.get("KUBE_NAMESPACE"),
-            os.environ.get("CONFIGMAP_SELECTOR"),
+            config.get('switchover_state_label_selector'),
             os.environ.get("PATRONI_LOCAL_API"),
             os.environ.get("PY_ENV"),
             logic_q,
@@ -190,9 +190,9 @@ if __name__ == '__main__':
 
     if is_enabled('kube_watch'):
         t = Process(target=kube_watch, args=(
-            os.environ.get("KUBE_NAMESPACE"),
+            os.environ.get("KUBE_HEALTH_NAMESPACE"),
             'configmap',
-            os.environ.get("CONFIGMAP_SELECTOR"),
+            config.get("switchover_state_label_selector"),
             os.environ.get("PY_ENV"),
             logic_q
         ))

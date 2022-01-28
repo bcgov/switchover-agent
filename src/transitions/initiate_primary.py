@@ -19,29 +19,29 @@ logger = logging.getLogger(__name__)
 # - wait for deployment to complete (Tekton Event ID)
 #   - then turn maintenance mode off
 
-def initiate_active_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def initiate_active_primary(logic_context, patroni_local_url: str, py_env: str):
     set_in_recovery(False, py_env)
 
-    maintenance_on(namespace, py_env)
+    maintenance_on(py_env)
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
 
-    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
+    return deploy_primary(logic_context, patroni_local_url, py_env)
 
 
-def initiate_passive_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def initiate_passive_primary(logic_context, patroni_local_url: str, py_env: str):
     set_in_recovery(True, py_env)
 
-    maintenance_on(namespace, py_env)
+    maintenance_on(py_env)
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
 
-    return deploy_primary(logic_context, namespace, patroni_local_url, py_env)
+    return deploy_primary(logic_context, patroni_local_url, py_env)
 
 
-def deploy_primary(logic_context, namespace: str, patroni_local_url: str, py_env: str):
+def deploy_primary(logic_context, patroni_local_url: str, py_env: str):
     logger.info("initiate_primary")
 
     patroni = logic_context.patroni
@@ -53,7 +53,7 @@ def deploy_primary(logic_context, namespace: str, patroni_local_url: str, py_env
         set_primary_cluster(patroni_local_url)
 
         update_patroni_spilo_env_vars(
-            namespace, False, py_env)
+            False, py_env)
 
     pipeline_event = trigger_tekton_build(config.get("tekton_trigger_url"),
                                           config.get("tekton_github_repo"),

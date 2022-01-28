@@ -78,9 +78,9 @@ class Logic:
                                             datetime.datetime.now())
                                 # set the maintenance mode appropriately
                                 if self.pipeline['maintenance']:
-                                    maintenance_on(namespace, py_env)
+                                    maintenance_on(py_env)
                                 else:
-                                    maintenance_off(namespace, py_env)
+                                    maintenance_off(py_env)
                                 self.pipeline = dict(
                                     event_id=None, start_ts=None, maintenance=False)
 
@@ -154,7 +154,7 @@ class Logic:
                         if check_active_site or check_passive_site:
                             logger.warn("Transitioning to golddr-primary")
                             self.update_switchover_state(
-                                namespace, None, 'golddr-primary', None, py_env)
+                                None, 'golddr-primary', None, py_env)
                     else:
                         self.GAUGE.labels(resource="automation").set(0)
 
@@ -166,7 +166,7 @@ class Logic:
                     # - item.message.event == transition_to (state = active-passive and gold-standby)
                     if item['message']['event'] == 'transition_to':
                         self.update_switchover_state(
-                            namespace, None, item['message']['state'], None, py_env)
+                            None, item['message']['state'], None, py_env)
 
                 if item['event'] == 'switchover_state':
                     transition = item['data']['transition']
@@ -175,7 +175,7 @@ class Logic:
 
                     if item['data']['last_stable_state'] == "":
                         self.update_switchover_state(
-                            namespace, 'independent', None, py_env)
+                            'independent', None, py_env)
                         continue
 
                     if transition == '':
@@ -211,7 +211,7 @@ class Logic:
 
                                 # TODO: Do a: is_peer_happy_to_proceed()
                                 initiate_active_primary(self,
-                                                        namespace, patroni_local_url, py_env)
+                                                        patroni_local_url, py_env)
 
                                 # Let the Passive peer know active-passive should happen
                                 fwd_to_peer_q.put({"event": "from_peer", "message": {
@@ -221,7 +221,7 @@ class Logic:
                             elif cluster == config.get('passive_site'):
 
                                 work = initiate_passive_standby(self,
-                                                                namespace, patroni_local_url, py_env)
+                                                                py_env)
                                 if work is None:
                                     next_state = transition
                                 else:
@@ -229,7 +229,7 @@ class Logic:
                                     next_state = "%s-partial" % transition
 
                             self.update_switchover_state(
-                                namespace, next_state, '', None, py_env)
+                                next_state, '', None, py_env)
 
                         elif transition == 'gold-standby':
 
@@ -248,7 +248,7 @@ class Logic:
                             elif cluster == config.get('active_site'):
                                 # TODO: Do a: is_peer_happy_to_proceed()
                                 work = initiate_active_standby(
-                                    self, namespace, patroni_local_url, py_env)
+                                    self, py_env)
                                 if work is None:
                                     next_state = transition
                                 else:
@@ -266,13 +266,13 @@ class Logic:
                                 next_state = transition
 
                             self.update_switchover_state(
-                                namespace, next_state, '', None, py_env)
+                                next_state, '', None, py_env)
 
                         elif transition == 'golddr-primary':
 
                             if cluster == config.get('active_site'):
 
-                                initiate_active_down(namespace, py_env)
+                                initiate_active_down(py_env)
 
                                 # Let the Passive peer know golddr-primary should happen
                                 # : if AUTOMATION_ENABLED, then GSLB should trigger this anyway on peer
@@ -284,11 +284,11 @@ class Logic:
                             elif cluster == config.get('passive_site'):
 
                                 initiate_passive_primary(self,
-                                                         namespace, patroni_local_url, py_env)
+                                                         patroni_local_url, py_env)
                                 next_state = transition
 
                             self.update_switchover_state(
-                                namespace, next_state, '', None, py_env)
+                                next_state, '', None, py_env)
 
                         elif transition == 'golddr-maintenance':
 
@@ -315,7 +315,7 @@ class Logic:
                                 next_state = transition
 
                             self.update_switchover_state(
-                                namespace, next_state, '', None, py_env)
+                                next_state, '', None, py_env)
 
                         else:
                             logger.error(
@@ -324,7 +324,7 @@ class Logic:
                         logger.debug(
                             "Configmap update - last state is already same as transition - no work to do")
                         self.update_switchover_state(
-                            namespace, None, '', None, py_env)
+                            None, '', None, py_env)
 
             except Exception as ex:
                 logger.error(
@@ -338,8 +338,9 @@ class Logic:
     def set_pipeline(self, pipeline: dict):
         self.pipeline = pipeline
 
-    def update_switchover_state(self, namespace: str, last_stable_state: str, transition: str, maintenance: str, py_env: str):
-        name = config['configmap_switchover']
+    def update_switchover_state(self, last_stable_state: str, transition: str, maintenance: str, py_env: str):
+        name = config['switchover_state_configmap']
+        ns = config['switchover_namespace']
         data = dict()
         if last_stable_state is not None:
             data['last_stable_state'] = last_stable_state
@@ -347,7 +348,7 @@ class Logic:
         if transition is not None:
             data['transition'] = transition
         data['maintenance'] = maintenance
-        update_configmap(namespace, name, py_env, dict(data=data))
+        update_configmap(ns, name, py_env, dict(data=data))
 
     def pick_params(self, list, keys):
         pairs = {}

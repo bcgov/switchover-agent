@@ -8,12 +8,14 @@ from clients.maintenance import set_maintenance
 logger = logging.getLogger(__name__)
 
 
-def maintenance_on(namespace: str, py_env: str):
+def maintenance_on(py_env: str):
     logger.debug("MAINTENANCE TURNING ON..")
 
+    ns = config.get('keycloak_maintenance_page_namespace')
+
     # Cycle maintenance page (clears out any connections there might be)
-    restart_deployment(namespace, config.get(
-        'deployment_keycloak_maintenance_page'), py_env)
+    restart_deployment(ns, config.get(
+        'keycloak_maintenance_page_deployment'), py_env)
 
     # Switch keycloak service to maintenance
     keycloak_service_block()
@@ -24,12 +26,14 @@ def maintenance_on(namespace: str, py_env: str):
     logger.debug("MAINTENANCE ON - OK")
 
 
-def maintenance_off(namespace: str, py_env: str):
+def maintenance_off(py_env: str):
     logger.debug("MAINTENANCE TURNING OFF..")
 
+    ns = config.get('keycloak_maintenance_page_namespace')
+
     # Cycle maintenance page (clears out any connections there might be)
-    restart_deployment(namespace, config.get(
-        'deployment_keycloak_maintenance_page'), py_env)
+    restart_deployment(ns, config.get(
+        'keycloak_maintenance_page_deployment'), py_env)
 
     # Switch keycloak service to keycloak
     keycloak_service_flow()
@@ -61,8 +65,10 @@ def set_in_maintenance(state: bool, py_env: str):
                  config.get("tekton_terraform_tfvars"), py_env, spec)
 
 
-def update_patroni_spilo_env_vars(namespace: str, standby: bool, py_env: str):
+def update_patroni_spilo_env_vars(standby: bool, py_env: str):
     name = config['configmap_patroni_env_vars']
+    ns = config['solution_namespace']
+
     if standby:
         update = dict(data=dict(
             STANDBY_HOST=config['patroni_peer_host'],
@@ -73,4 +79,4 @@ def update_patroni_spilo_env_vars(namespace: str, standby: bool, py_env: str):
             STANDBY_HOST="",
             STANDBY_PORT=""
         ))
-    update_configmap(namespace, name, py_env, update)
+    update_configmap(ns, name, py_env, update)
