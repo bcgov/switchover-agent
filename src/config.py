@@ -8,20 +8,19 @@ config = dict(
     active_ip='142.34.229.4',
     passive_ip='142.34.64.4',
     switchover_namespace=os.environ.get("KUBE_HEALTH_NAMESPACE"),
-    switchover_state_label_configmap="switchover-state-%s" % os.environ.get(
+    switchover_state_configmap="switchover-state-%s" % os.environ.get(
         "ENVIRONMENT"),
     switchover_state_label_selector="app=switchover,name=switchover-config,env=%s" % os.environ.get(
         "ENVIRONMENT"),
+    solution_namespace=os.environ.get("KUBE_NAMESPACE"),
     deployment_health_api="bcgov-health-api-%s-generic-api" % os.environ.get(
         "ENVIRONMENT"),
     deployment_kong_control_plane='konghc-kong',
     deployment_kong_control_plane_label_selector='app.kubernetes.io/instance=konghc',
     deployment_keycloak_maintenance_page='keycloak-maintenance-redirect-generic-api',
     deployment_keycloak_maintenance_page_label_selector='app.kubernetes.io/instance=keycloak-maintenance-redirect',
-    keycloak_maintenance_page_namespace=os.environ.get("KUBE_NAMESPACE"),
     keycloak_maintenance_page_deployment='keycloak-maintenance-redirect-generic-api',
     keycloak_maintenance_page_label_selector='app.kubernetes.io/instance=keycloak-maintenance-redirect',
-    solution_namespace=os.environ.get("KUBE_NAMESPACE"),
     statefulset_patroni='patroni-spilo',
     statefulset_keycloak='keycloak',
     statefulset_keycloak_label_selector='app.kubernetes.io/instance=keycloak',

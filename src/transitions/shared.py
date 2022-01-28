@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def maintenance_on(py_env: str):
     logger.debug("MAINTENANCE TURNING ON..")
 
-    ns = config.get('keycloak_maintenance_page_namespace')
+    ns = config.get('solution_namespace')
 
     # Cycle maintenance page (clears out any connections there might be)
     restart_deployment(ns, config.get(
@@ -29,7 +29,7 @@ def maintenance_on(py_env: str):
 def maintenance_off(py_env: str):
     logger.debug("MAINTENANCE TURNING OFF..")
 
-    ns = config.get('keycloak_maintenance_page_namespace')
+    ns = config.get('solution_namespace')
 
     # Cycle maintenance page (clears out any connections there might be)
     restart_deployment(ns, config.get(
