@@ -54,7 +54,7 @@ def check_health():
 
 
 @app.put("/rollback-active-down")
-def rollback_active_down():
+def rollback_active_down_api():
     rollback_active_down(os.environ.get("PY_ENV"))
     return {"done": "true"}
 
