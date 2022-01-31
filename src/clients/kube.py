@@ -36,28 +36,19 @@ async def watch_stream(namespace: str, kind: str, label_selector: str, py_env: s
         logger.info("Watching for %s matching %s..." % (kind, label_selector))
         try:
             if kind == 'configmap':
-              list = v1.list_namespaced_config_map
+                list = v1.list_namespaced_config_map
             if kind == 'statefulset':
-              list = v1.list_namespaced_pod
+                list = v1.list_namespaced_pod
             for event in w.stream(list, namespace=namespace, label_selector=label_selector, watch=True, timeout_seconds=600):
                 logger.debug("Event: %s %s %s" % (
                     event['type'], event['object'].kind, event['object'].metadata.name))
                 if kind == 'configmap':
-                  config_as_str = json.dumps(event['object'].data, indent=4)
-                  logger.info(config_as_str)
-                  if last_result != config_as_str and event['type'] != 'DELETED':
-                      logic_q.put(
-                          {"event": "switchover_state", "data": event['object'].data})
-                      last_result = config_as_str
-                if kind == 'statefulset' and event['object'].status.conditions is not None:
-                  for condition in event['object'].status.conditions:
-                    if condition.type == 'Ready':
-                      if condition.status == 'False':
-                        logger.debug("Waiting to be ready...")
-                      else:
-                        logger.debug("Ready!")
+                    config_as_str = json.dumps(event['object'].data, indent=4)
+                    logger.info(config_as_str)
+                    if last_result != config_as_str and event['type'] != 'DELETED':
                         logic_q.put(
-                            {"event": "keycloak"})
+                            {"event": "switchover_state", "data": event['object'].data})
+                        last_result = config_as_str
 
         except ReadTimeoutError:
             logger.warning("There was a timeout error accessing the Kube API. "
@@ -95,12 +86,14 @@ def update_configmap(namespace: str, name: str, py_env: str, configmap_spec):
             "Exception when calling AppsV1Api->patch_namespaced_config_map: %s\n" % e)
         raise
 
+
 def get_service(namespace: str, label_selector: str, py_env: str):
     v1 = init_client(py_env)
 
     services = v1.list_namespaced_service(
         namespace=namespace, label_selector=label_selector)
     return services.items[0]
+
 
 def update_service(namespace: str, name: str, py_env: str, service_spec):
 
@@ -117,6 +110,7 @@ def update_service(namespace: str, name: str, py_env: str, service_spec):
         logger.error(
             "Exception when calling AppsV1Api->patch_namespaced_service: %s\n" % e)
         raise
+
 
 def scale_and_wait(namespace: str, kind: str, name: str, label_selector: str, replicas: int, py_env: str):
     scale(namespace, kind, name, replicas, py_env)
@@ -149,9 +143,9 @@ def wait_for_scale(namespace: str, kind: str, label_selector: str, replicas: int
     w = watch.Watch()
 
     if kind == 'deployment':
-       api_call = v1.list_namespaced_deployment
+        api_call = v1.list_namespaced_deployment
     else:
-       api_call = v1.list_namespaced_stateful_set
+        api_call = v1.list_namespaced_stateful_set
     logger.debug("wait_for_scale %s : %s" % (kind, label_selector))
 
     for event in w.stream(api_call, namespace=namespace, label_selector=label_selector, watch=True, timeout_seconds=120):
@@ -159,7 +153,8 @@ def wait_for_scale(namespace: str, kind: str, label_selector: str, replicas: int
             event['type'], event['object'].kind, event['object'].metadata.name, event['object'].status.ready_replicas))
         if event['object'].status.replicas == 0 and replicas == 0:
             w.stop()
-            logger.debug("wait done - %s scaled to %d" % (label_selector, replicas))
+            logger.debug("wait done - %s scaled to %d" %
+                         (label_selector, replicas))
             return True
         if event['object'].status.ready_replicas is None and replicas == 0:
             w.stop()
@@ -168,20 +163,22 @@ def wait_for_scale(namespace: str, kind: str, label_selector: str, replicas: int
 
         if event['object'].status.ready_replicas == replicas:
             w.stop()
-            logger.debug("wait done - %s scaled to %d" % (label_selector, replicas))
+            logger.debug("wait done - %s scaled to %d" %
+                         (label_selector, replicas))
             return True
 
     raise Exception(
         "Giving up waiting for stateful set scale to %d" % replicas)
 
-def restart_deployment( namespace: str, deployment: str, py_env: str):
+
+def restart_deployment(namespace: str, deployment: str, py_env: str):
     v1 = init_apps_client(py_env)
 
     now = datetime.datetime.utcnow()
     now = str(now.isoformat("T") + "Z")
     body = {
         'spec': {
-            'template':{
+            'template': {
                 'metadata': {
                     'annotations': {
                         'kubectl.kubernetes.io/restartedAt': now
@@ -191,12 +188,14 @@ def restart_deployment( namespace: str, deployment: str, py_env: str):
         }
     }
     try:
-        v1.patch_namespaced_deployment(deployment, namespace, body, pretty='true')
+        v1.patch_namespaced_deployment(
+            deployment, namespace, body, pretty='true')
         logger.debug("rollout restart for deployment %s" % deployment)
     except ApiException as e:
         logger.error(
             "Exception when calling AppsV1Api->patch_namespaced_deployment")
         logger.error(e)
+
 
 def delete_pvc(namespace: str, pvcname: str, py_env: str):
     v1 = init_client(py_env)
@@ -227,6 +226,25 @@ def delete_configmap(namespace: str, configmapname: str, py_env: str):
             raise
         else:
             logger.warn("Configmap already deleted %s" % configmapname)
+
+
+def patch_secret(namespace: str, name: str, py_env: str, secret_data):
+
+    v1 = init_client(py_env)
+
+    logger.debug("Updating secret %s" % name)
+
+    try:
+        v1.patch_namespaced_secret(
+            name=name,
+            namespace=namespace,
+            body={"stringData": secret_data})
+        logger.debug("Secret patched %s : %s" % (name, secret_data))
+
+    except ApiException as e:
+        logger.error(
+            "Exception when calling AppsV1Api->patch_namespaced_secret: %s\n" % e)
+        raise
 
 
 def init_client(py_env: str):
