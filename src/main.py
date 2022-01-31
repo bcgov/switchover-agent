@@ -25,9 +25,9 @@ from clients.kube import kube_watch, restart_deployment
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
 from clients.prom import prom_server
-from clients.maintenance import set_maintenance
 from clients.patroni import patroni_worker, set_readonly_cluster, set_primary_cluster, set_standby_cluster
 from transitions.initiate_down import rollback_active_down
+from transitions.shared import maintenance_off, maintenance_on
 from peers.server import peer_server
 from peers.client import peer_client
 from peers.client_fwd import peer_client_fwd
@@ -104,14 +104,14 @@ def initiate_standby():
 
 
 @app.put("/maintenance/on")
-def maintenance_on():
-    set_maintenance(os.environ.get("MAINTENANCE_URL"), True)
+def maintenance_on_req():
+    maintenance_on()
     return {"maintenance": True}
 
 
 @app.put("/maintenance/off")
-def maintenance_off():
-    set_maintenance(os.environ.get("MAINTENANCE_URL"), False)
+def maintenance_off_req():
+    maintenance_off(os.environ.get("PY_ENV"))
     return {"maintenance": False}
 
 

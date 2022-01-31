@@ -47,30 +47,35 @@ class Logic:
                     kind = spec['kind']
 
                     if kind == 'PipelineRun':
-                        logger.debug("   (track %s)" %
-                                     self.pipeline['event_id'])
 
                         mdnm = spec['metadata']['name']
                         event_id = spec['metadata']['labels']['triggers.tekton.dev/triggers-eventid']
-                        logger.debug("   name  = %s" % mdnm)
-                        logger.debug(
-                            "   event = %s" % event_id)
+
                         params = self.pick_params(spec['spec']['params'], [
                             "git-release-branch", "release-namespace"])
-                        for key in params.keys():
-                            logger.debug("   param  %-20s = %s" %
-                                         (key, params[key]))
+
+                        if item['data']['type'] != "ADDED":
+                            logger.debug("   (track %s)" %
+                                         self.pipeline['event_id'])
+                            logger.debug("   name  = %s" % mdnm)
+                            logger.debug(
+                                "   event = %s" % event_id)
+                            for key in params.keys():
+                                logger.debug("   param  %-20s = %s" %
+                                             (key, params[key]))
+
                         status_reason = "Undefined"
                         if 'status' in spec and 'conditions' in spec['status']:
                             status_reason = spec['status']['conditions'][0]['reason']
-                            logger.debug("   reason = %s" %
-                                         spec['status']['conditions'][0]['reason'])
-                            logger.debug("   status = %s" %
-                                         spec['status']['conditions'][0]['status'])
-                            logger.debug("   messag = %s" %
-                                         spec['status']['conditions'][0]['message'])
+                            if item['data']['type'] != "ADDED":
+                                logger.debug("   reason = %s" %
+                                             spec['status']['conditions'][0]['reason'])
+                                logger.debug("   status = %s" %
+                                             spec['status']['conditions'][0]['status'])
+                                logger.debug("   messag = %s" %
+                                             spec['status']['conditions'][0]['message'])
 
-                            if self.pipeline['event_id'] == event_id and (status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
+                            if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
                                 logger.info("End State for Pipeline!")
                                 logger.info("Tekton Start: %s" %
                                             self.pipeline['start_ts'])
@@ -78,7 +83,7 @@ class Logic:
                                             datetime.datetime.now())
                                 # set the maintenance mode appropriately
                                 if self.pipeline['maintenance']:
-                                    maintenance_on(py_env)
+                                    maintenance_on()
                                 else:
                                     maintenance_off(py_env)
                                 self.pipeline = dict(
