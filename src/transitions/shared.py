@@ -14,6 +14,8 @@ MAINT = Gauge('switchover_maintenance', 'Switchover Maintenance Indicator')
 def maintenance_on():
     logger.debug("MAINTENANCE TURNING ON..")
 
+    ns = config.get('solution_namespace')
+
     # Cycle maintenance page so that it starts
     restart_deployment(ns, config.get(
         'keycloak_maintenance_page_deployment'), config.get('py_env'))
