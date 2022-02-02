@@ -14,6 +14,10 @@ MAINT = Gauge('switchover_maintenance', 'Switchover Maintenance Indicator')
 def maintenance_on():
     logger.debug("MAINTENANCE TURNING ON..")
 
+    # Cycle maintenance page so that it starts
+    restart_deployment(ns, config.get(
+        'keycloak_maintenance_page_deployment'), config.get('py_env'))
+
     # Switch keycloak service to maintenance
     keycloak_service_block()
 
@@ -25,7 +29,7 @@ def maintenance_on():
     MAINT.set(1)
 
 
-def maintenance_off(py_env: str):
+def maintenance_off(py_env_ignored: str):
     logger.debug("MAINTENANCE TURNING OFF..")
 
     ns = config.get('solution_namespace')
@@ -35,7 +39,7 @@ def maintenance_off(py_env: str):
 
     # Cycle maintenance page (clears out any connections there might be)
     restart_deployment(ns, config.get(
-        'keycloak_maintenance_page_deployment'), py_env)
+        'keycloak_maintenance_page_deployment'), config.get('py_env'))
 
     # Turn off maintenance alert on Portal
     set_maintenance(config.get('maintenance_url'), False)
