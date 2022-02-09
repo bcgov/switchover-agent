@@ -76,6 +76,7 @@ class Logic:
                                              spec['status']['conditions'][0]['message'])
 
                             if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
+
                                 logger.info("End State for Pipeline!")
                                 logger.info("Tekton Start: %s" %
                                             self.pipeline['start_ts'])
@@ -290,6 +291,7 @@ class Logic:
 
                                 initiate_passive_primary(self,
                                                          patroni_local_url, py_env)
+
                                 next_state = transition
 
                             self.update_switchover_state(

@@ -50,7 +50,6 @@ def maintenance_off(py_env_ignored: str):
 
     MAINT.set(0)
 
-
 # Setting the in_recovery indicator on the pipeline will force in_maintenance to False
 def set_in_recovery(state: bool, py_env: str):
     state_str = 'false'
