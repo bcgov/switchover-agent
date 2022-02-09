@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def initiate_active_primary(logic_context, patroni_local_url: str, py_env: str):
     set_in_recovery(False, py_env)
 
-    maintenance_on(py_env)
+    maintenance_on()
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
@@ -33,7 +33,7 @@ def initiate_active_primary(logic_context, patroni_local_url: str, py_env: str):
 def initiate_passive_primary(logic_context, patroni_local_url: str, py_env: str):
     set_in_recovery(True, py_env)
 
-    maintenance_on(py_env)
+    maintenance_on()
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)

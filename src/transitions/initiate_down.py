@@ -17,7 +17,7 @@ def initiate_active_down(py_env: str):
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
 
-    maintenance_on(py_env)
+    maintenance_on()
 
 
 # Be really careful with this one; make sure Passive site is not live!

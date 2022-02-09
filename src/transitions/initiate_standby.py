@@ -38,7 +38,7 @@ def initiate_passive_standby(logic_context, py_env: str):
 def initiate_standby(logic_context, py_env: str, final_state: str):
     logger.info("initiate_standby")
 
-    maintenance_on(py_env)
+    maintenance_on()
 
     ns = config.get('solution_namespace')
 

@@ -7,6 +7,7 @@ config = dict(
     passive_site='golddr',
     active_ip='142.34.229.4',
     passive_ip='142.34.64.4',
+    py_env=os.environ.get("PY_ENV"),
     switchover_namespace=os.environ.get("KUBE_HEALTH_NAMESPACE"),
     switchover_state_configmap="switchover-state-%s" % os.environ.get(
         "ENVIRONMENT"),
