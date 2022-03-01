@@ -56,12 +56,6 @@ def initiate_standby(logic_context, py_env: str, final_state: str):
                        "app=%s" % config.get('statefulset_patroni'),
                        0, py_env)
 
-        scale_and_wait(ns, 'deployment',
-                       config.get('deployment_kong_control_plane'),
-                       config.get(
-                           'deployment_kong_control_plane_label_selector'),
-                       0, py_env)
-
         update_patroni_spilo_env_vars(
             True, py_env)
 
