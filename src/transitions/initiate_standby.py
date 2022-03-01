@@ -62,11 +62,6 @@ def initiate_standby(logic_context, py_env: str, final_state: str):
                            'deployment_kong_control_plane_label_selector'),
                        0, py_env)
 
-        scale_and_wait(ns, 'statefulset',
-                       config.get('statefulset_keycloak'),
-                       config.get('statefulset_keycloak_label_selector'),
-                       0, py_env)
-
         update_patroni_spilo_env_vars(
             True, py_env)
 
