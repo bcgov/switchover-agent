@@ -15,9 +15,8 @@ def trigger_tekton_build(tekton_url: str, github_repo: str, github_ref: str, hma
 
     base_template = {
         "ref": github_ref,
-        "pusher": {"name": "switchover_agent"},
         "repository": {"name": "", "clone_url": github_repo},
-        "head_commit": {"id": "", "message": ""}
+        "head_commit": {"id": "", "message": "", "author": { "username": "switchover_agent" } }
     }
 
     payload = json.dumps(base_template)
