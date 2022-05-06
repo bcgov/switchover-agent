@@ -1,6 +1,6 @@
 import logging
 from clients.tekton import trigger_tekton_build
-from clients.kube import scale
+from clients.kube import scale, restart_deployment
 from transitions.shared import maintenance_on, maintenance_off, set_in_recovery
 from config import config
 
@@ -19,6 +19,10 @@ def initiate_active_down(py_env: str):
 
     maintenance_on()
 
+    # cycle the kong control plane to force data planes to re-establish connections
+    restart_deployment(config.get('solution_namespace'),
+                       config.get('deployment_kong_control_plane'),
+                       config.get('py_env'))
 
 # Be really careful with this one; make sure Passive site is not live!
 def rollback_active_down(py_env: str):
