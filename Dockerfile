@@ -28,5 +28,8 @@ COPY ./pyproject.toml /app
 
 EXPOSE 8000
 
+ENV PROMETHEUS_MULTIPROC_DIR=/tmp
+ENV PY_ENV=local
+
 ENTRYPOINT ["poetry", "run"]
 CMD ["python", "src/main.py"]
