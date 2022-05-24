@@ -191,7 +191,7 @@ if __name__ == '__main__':
 
     if is_enabled('dns_watch'):
         t = Process(target=dns_watch, args=(
-            os.environ.get("DNS_SERVICE_URL"),
+            os.environ.get("DNS_SERVICE_URL", ''),
             os.environ.get("GSLB_DOMAIN"),
             logic_q
         ))
