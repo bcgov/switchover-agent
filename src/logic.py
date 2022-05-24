@@ -265,6 +265,20 @@ class Logic:
                             self.update_switchover_state(
                                 next_state, '', None, py_env)
 
+                        elif transition == 'active-passive-force':
+                            if cluster == config.get('active_site'):
+                                initiate_active_primary(self,
+                                                        patroni_local_url, py_env)
+
+                                # Let the Passive peer know active-passive should happen
+                                fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                                  "event": "transition_to", "state": transition}})
+
+                                next_state = 'active-passive'
+
+                            self.update_switchover_state(
+                                next_state, '', None, py_env)
+
                         elif transition == 'gold-standby':
 
                             if self.peer == 'error':
