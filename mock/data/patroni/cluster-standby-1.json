@@ -1,0 +1,13 @@
+{
+  "members": [
+    {
+      "name": "patroni-spilo-0",
+      "role": "standby_leader",
+      "state": "running",
+      "api_url": "http://10.97.18.100:8008/patroni",
+      "host": "10.97.18.100",
+      "port": 5432,
+      "timeline": 26
+    }
+  ]
+}

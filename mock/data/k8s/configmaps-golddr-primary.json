@@ -1,0 +1,22 @@
+{
+  "type": "MODIFIED",
+  "object": {
+    "kind": "ConfigMap",
+    "apiVersion": "v1",
+    "metadata": {
+      "name": "switchover-state-local",
+      "namespace": "b8840c-tools",
+      "labels": {
+        "app": "switchover",
+        "env": "local",
+        "name": "switchover-config"
+      },
+      "annotations": {}
+    },
+    "data": {
+      "last_stable_state": "golddr-primary",
+      "last_stable_state_ts": "2022-05-17T22:45:04.591398",
+      "transition": ""
+    }
+  }
+}

@@ -23,7 +23,7 @@ COPY ./poetry.lock /tmp/
 
 RUN cd /tmp && poetry install --no-root --no-dev
 
-COPY ./src /app/src
+COPY ./mock /app/src
 COPY ./pyproject.toml /app
 
 EXPOSE 8000

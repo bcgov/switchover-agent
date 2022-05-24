@@ -59,7 +59,7 @@ async def watch_stream(namespace: str, kind: str, label_selector: str, py_env: s
             traceback.print_exc(file=sys.stdout)
             time.sleep(5)
         else:
-            logger.warning('Watch died gracefully, starting back up')
+            logger.debug('Watch died gracefully, starting back up')
 
 
 def get_configmap(namespace: str, label_selector: str, py_env: str):
@@ -74,7 +74,7 @@ def update_configmap(namespace: str, name: str, py_env: str, configmap_spec):
 
     v1 = init_client(py_env)
 
-    logger.debug("Updating configmap %s" % name)
+    logger.debug("Updating configmap %s to %s", name, configmap_spec)
 
     try:
         api_response = v1.patch_namespaced_config_map(

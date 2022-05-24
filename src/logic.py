@@ -26,6 +26,7 @@ class Logic:
     patroni = dict(control='unknown', concerns=[], leader=dict(role='unknown'))
     pipeline = dict(event_id=None, start_ts=None,
                     maintenance=False)
+    last_switchover_state = None
 
     triggers = []
     PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
@@ -100,6 +101,7 @@ class Logic:
 
                 if item['event'] == 'patroni':
                     self.patroni = item
+                    logger.debug("[patroni] %s", item)
                     if item['control'] == 'up':
                         self.METRIC.labels(
                             resource="patroni", state=("IsStandby=%s" % item['is_standby_configured'])).inc()
@@ -130,6 +132,7 @@ class Logic:
 
                 if item['event'] == 'dns':
                     dns = item['result']
+                    logger.debug("DNS resolution: %s", dns)
                     if dns == config.get('active_ip'):
                         self.METRIC.labels(
                             resource="dns", state="active/%s" % dns).inc()
@@ -174,14 +177,33 @@ class Logic:
                         self.update_switchover_state(
                             None, item['message']['state'], None, py_env)
 
+                    if item['message']['event'] == 'confirm_happy_to_proceed':
+                        logger.debug(
+                            "From peer - confirm_happy_to_proceed")
+                        
+                        # Only provide a positive confirmation if there is no transition and matches the required_state
+                        # requested by the Peer
+                        if last_switchover_state is not None and last_switchover_state['transition'] == '' and last_switchover_state['last_stable_state'] == item['message']['required_state']:
+                          fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                "event": "yes_happy_to_proceed", "item": item['message']['item']}})
+                        else:
+                          logger.warn("From peer - confirmation FAILED - not in %s (%s)", item['message']['required_state'], last_switchover_state)
+
+                    if item['message']['event'] == 'yes_happy_to_proceed':
+                        logger.debug(
+                            "From peer - yes_happy_to_proceed")
+                        item = item['message']['item']
+                        item['peer_ok'] = True
+
                 if item['event'] == 'switchover_state':
+                    last_switchover_state = item['data']
                     transition = item['data']['transition']
                     self.METRIC.labels(
                         resource="switchover_state", state=transition).inc()
 
                     if item['data']['last_stable_state'] == "":
                         self.update_switchover_state(
-                            'independent', None, py_env)
+                            'independent', None, None, py_env)
                         continue
 
                     if transition == '':
@@ -190,6 +212,8 @@ class Logic:
                         self.GAUGE.labels(resource="transition").set(0)
 
                     elif transition != item['data']['last_stable_state']:
+                        logger.info("transitioning to %s", transition)
+                        
                         self.GAUGE.labels(resource="transition").set(1)
 
                         last_stable_state = item['data']['last_stable_state']
@@ -214,16 +238,20 @@ class Logic:
                                 self.METRIC.labels(
                                     resource="logic", state="warning").inc()
                             elif cluster == config.get('active_site'):
+                                # is_peer_happy_to_proceed()
+                                if 'peer_ok' not in item:
+                                  fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                      "event": "confirm_happy_to_proceed", "required_state": "gold-standby", "item": item}})
+                                else:
+                                  initiate_active_primary(self,
+                                                          patroni_local_url, py_env)
 
-                                # TODO: Do a: is_peer_happy_to_proceed()
-                                initiate_active_primary(self,
-                                                        patroni_local_url, py_env)
+                                  # Let the Passive peer know active-passive should happen
+                                  fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                                    "event": "transition_to", "state": transition}})
 
-                                # Let the Passive peer know active-passive should happen
-                                fwd_to_peer_q.put({"event": "from_peer", "message": {
-                                                  "event": "transition_to", "state": transition}})
+                                  next_state = transition
 
-                                next_state = transition
                             elif cluster == config.get('passive_site'):
 
                                 work = initiate_passive_standby(self,
@@ -233,6 +261,20 @@ class Logic:
                                 else:
                                     self.triggers.append(work)
                                     next_state = "%s-partial" % transition
+
+                            self.update_switchover_state(
+                                next_state, '', None, py_env)
+
+                        elif transition == 'active-passive-force':
+                            if cluster == config.get('active_site'):
+                                initiate_active_primary(self,
+                                                        patroni_local_url, py_env)
+
+                                # Let the Passive peer know active-passive should happen
+                                fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                                  "event": "transition_to", "state": transition}})
+
+                                next_state = 'active-passive'
 
                             self.update_switchover_state(
                                 next_state, '', None, py_env)
@@ -252,18 +294,22 @@ class Logic:
                                     resource="logic", state="warning").inc()
 
                             elif cluster == config.get('active_site'):
-                                # TODO: Do a: is_peer_happy_to_proceed()
-                                work = initiate_active_standby(
-                                    self, py_env)
-                                if work is None:
-                                    next_state = transition
+                                # is_peer_happy_to_proceed()
+                                if 'peer_ok' not in item:
+                                  fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                      "event": "confirm_happy_to_proceed", "required_state": "golddr-primary", "item": item}})
                                 else:
-                                    self.triggers.append(work)
-                                    next_state = "%s-partial" % transition
+                                  work = initiate_active_standby(
+                                      self, py_env)
+                                  if work is None:
+                                      next_state = transition
+                                  else:
+                                      self.triggers.append(work)
+                                      next_state = "%s-partial" % transition
 
-                                # Let the Passive peer know gold-standby should happen
-                                fwd_to_peer_q.put({"event": "from_peer", "message": {
-                                                  "event": "transition_to", "state": transition}})
+                                  # Let the Passive peer know gold-standby should happen
+                                  fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                                    "event": "transition_to", "state": transition}})
 
                             elif cluster == config.get('passive_site'):
                                 # do nothing - passive site is already primary
@@ -324,6 +370,12 @@ class Logic:
                             self.update_switchover_state(
                                 next_state, '', None, py_env)
 
+                        elif transition == 'test-ping-pong':
+                            if 'peer_ok' not in item:
+                              fwd_to_peer_q.put({"event": "from_peer", "message": {
+                                  "event": "confirm_happy_to_proceed", "required_state": "independent", "item": item}})
+                            else:
+                              logger.debug("OK, LETS DO IT!")
                         else:
                             logger.error(
                                 "Unsupported transition '%s'" % transition)

@@ -1,0 +1,113 @@
+version: '3.8'
+
+networks:
+  switchover-net: {}
+
+x-common-variables: &common-variables
+  #LOG_LEVEL: websockets.server=WARN,kube=WARN,logic=DEBUG,peers.client=WARN,peers.client_fwd=WARN,peers.server=WARN,clients.dns=WARN,clients.kube=WARN,clients.kube_stream=WARN,root=WARN
+  TLS_CA: /config/tls/rootCA.crt
+  TLS_LOCAL_CRT: /config/tls/switchover-peer.crt
+  TLS_LOCAL_KEY: /config/tls/switchover-peer.key
+  AUTOMATION_ENABLED: "true"
+  KUBE_NAMESPACE: 000000-dev
+  KUBE_HEALTH_NAMESPACE: 000000-tools
+  KUBE_TEKTON_NAMESPACE: 000000-tools
+  #PROCESS_LIST: logic_handler,dns_watch
+  PROCESS_LIST: logic_handler,kube_watch,dns_watch,patroni_worker,tekton_watch,peer_server,peer_client,peer_client_fwd
+  ENVIRONMENT: local
+  GSLB_DOMAIN: mock.localtest.me
+  #PATRONI_LOCAL_API: http://mock.localtest.me:8000/patroni
+  PATRONI_PEER_HOST: patroni-peer.local
+  PATRONI_PEER_PORT: 10000
+  #MAINTENANCE_URL: http://mock.localtest.me:8000/maintenance
+  #TEKTON_URL: http://mock.localtest.me:8000/tekton
+  TEKTON_GITHUB_REF: "refs/heads/deploy/dev"
+  TEKTON_HMAC_SECRET: ""
+  TEKTON_GITHUB_REPO: https://github.com/bcgov-dss/api-serv-infra.git
+  TERRAFORM_TFVARS: terraform-pipeline-local-tfvars
+  # DNS_SERVICE_URL: http://mock-active.localtest.me:8000/dns
+  KEYCLOAK_SELECTOR: app.kubernetes.io/name=keycloak
+
+
+services:
+  switchover-agent-active:
+    image: agent.local:latest
+    container_name: switchover-agent-active
+    ports:
+    - 6666:8000
+    volumes:
+      - ./local:/config
+      - ./local/kube/active:/root/.kube
+    environment:
+      <<: *common-variables
+      KUBE_CLUSTER: gold
+      PEER_HOST: agent-passive.localtest.me
+      PEER_PORT: 8765
+      PATRONI_LOCAL_API: http://mock-active.localtest.me:8000/patroni
+      MAINTENANCE_URL: http://mock-active.localtest.me:8000/maintenance
+      TEKTON_URL: http://mock-active.localtest.me:8000/tekton
+      DNS_SERVICE_URL: http://mock-active.localtest.me:8000/dns
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      switchover-net:
+        aliases:
+          - agent-active.localtest.me
+    depends_on:
+      - mock
+
+  switchover-agent-passive:
+    image: agent.local:latest
+    container_name: switchover-agent-passive
+    volumes:
+      - ./local:/config
+      - ./local/kube/passive:/root/.kube
+    environment:
+      <<: *common-variables
+      KUBE_CLUSTER: golddr
+      PEER_HOST: agent-active.localtest.me
+      PEER_PORT: 8765
+      PATRONI_LOCAL_API: http://mock-passive.localtest.me:8000/patroni
+      MAINTENANCE_URL: http://mock-passive.localtest.me:8000/maintenance
+      TEKTON_URL: http://mock-passive.localtest.me:8000/tekton
+      DNS_SERVICE_URL: http://mock-passive.localtest.me:8000/dns
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      switchover-net:
+        aliases:
+          - agent-passive.localtest.me
+    depends_on:
+      - mock
+
+  mock-active:
+    image: agent-mock.local:latest
+    container_name: mock-active
+    environment:
+      LOG_LEVEL: INFO
+    ports:
+    - 6664:8000
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    networks:
+      switchover-net:
+        aliases:
+          - mock-active.localtest.me
+
+  mock-passive:
+    image: agent-mock.local:latest
+    container_name: mock-passive
+    environment:
+      LOG_LEVEL: INFO
+    ports:
+    - 6665:8000
+    build:
+      context: .
+      dockerfile: Dockerfile.mock
+    networks:
+      switchover-net:
+        aliases:
+          - mock-passive.localtest.me
