@@ -1,0 +1,222 @@
+{
+  "type": "MODIFIED",
+  "object": {
+    "kind": "StatefulSet",
+    "apiVersion": "apps/v1",
+    "metadata": {
+      "name": "patroni-spilo",
+      "namespace": "b8840c-dev",
+      "uid": "a66e7487-84cb-4b65-87c2-c24db19af91d",
+      "resourceVersion": "934689552",
+      "generation": 1538,
+      "creationTimestamp": "2021-11-04T16:13:57Z",
+      "labels": {
+        "app": "patroni-spilo",
+        "app.kubernetes.io/managed-by": "Helm",
+        "chart": "patroni-spilo-0.21.5",
+        "heritage": "Helm",
+        "release": "patroni-spilo"
+      },
+      "annotations": {
+        "meta.helm.sh/release-name": "patroni-spilo",
+        "meta.helm.sh/release-namespace": "b8840c-dev"
+      }
+    },
+    "spec": {
+      "replicas": 3,
+      "selector": {
+        "matchLabels": { "app": "patroni-spilo", "release": "patroni-spilo" }
+      },
+      "template": {
+        "metadata": {
+          "name": "patroni-spilo",
+          "creationTimestamp": null,
+          "labels": { "app": "patroni-spilo", "release": "patroni-spilo" }
+        },
+        "spec": {
+          "volumes": [
+            {
+              "name": "patroni-config",
+              "secret": { "secretName": "patroni-spilo", "defaultMode": 420 }
+            }
+          ],
+          "containers": [
+            {
+              "name": "patroni-spilo",
+              "image": "docker.pkg.github.com/bcgov-dss/api-serv-infra/patroni-spilo:2.1-7c4278ff",
+              "ports": [
+                { "containerPort": 8008, "protocol": "TCP" },
+                {
+                  "name": "postgresql",
+                  "containerPort": 5432,
+                  "protocol": "TCP"
+                }
+              ],
+              "envFrom": [
+                { "configMapRef": { "name": "patroni-spilo-env-vars" } }
+              ],
+              "env": [
+                {
+                  "name": "PGPASSWORD_SUPERUSER",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "patroni-spilo",
+                      "key": "password-superuser"
+                    }
+                  }
+                },
+                {
+                  "name": "PGPASSWORD_ADMIN",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "patroni-spilo",
+                      "key": "password-admin"
+                    }
+                  }
+                },
+                {
+                  "name": "PGPASSWORD_STANDBY",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "name": "patroni-spilo",
+                      "key": "password-standby"
+                    }
+                  }
+                },
+                { "name": "DCS_ENABLE_KUBERNETES_API", "value": "true" },
+                {
+                  "name": "KUBERNETES_LABELS",
+                  "value": "{ \"app\": \"patroni-spilo\", \"release\": \"patroni-spilo\" }"
+                },
+                { "name": "KUBERNETES_SCOPE_LABEL", "value": "app" },
+                { "name": "SCOPE", "value": "patroni-spilo" },
+                { "name": "USE_WALE" },
+                { "name": "PGROOT", "value": "/home/postgres/pgdata/pgroot" },
+                {
+                  "name": "POD_NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "apiVersion": "v1",
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                { "name": "ALLOW_NOSSL", "value": "true" },
+                { "name": "KUBERNETES_BYPASS_API_SERVICE", "value": "false" },
+                { "name": "KUBERNETES_USE_CONFIGMAPS", "value": "false" },
+                { "name": "PGVERSION", "value": "12" }
+              ],
+              "resources": {
+                "limits": { "cpu": "200m", "memory": "600Mi" },
+                "requests": { "cpu": "100m", "memory": "400Mi" }
+              },
+              "volumeMounts": [
+                {
+                  "name": "storage-volume",
+                  "mountPath": "/home/postgres/pgdata"
+                },
+                {
+                  "name": "patroni-config",
+                  "readOnly": true,
+                  "mountPath": "/etc/patroni"
+                }
+              ],
+              "livenessProbe": {
+                "httpGet": {
+                  "path": "/health",
+                  "port": 8008,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 120,
+                "timeoutSeconds": 30,
+                "periodSeconds": 10,
+                "successThreshold": 1,
+                "failureThreshold": 10
+              },
+              "lifecycle": {
+                "preStop": {
+                  "exec": {
+                    "command": [
+                      "/usr/bin/env",
+                      "bash",
+                      "-c",
+                      "# switch leader pod if the current pod is the leader\nif curl --fail http://localhost:8008/read-write; then\n  patronictl switchover --force\nfi\n"
+                    ]
+                  }
+                }
+              },
+              "terminationMessagePath": "/dev/termination-log",
+              "terminationMessagePolicy": "File",
+              "imagePullPolicy": "Always"
+            }
+          ],
+          "restartPolicy": "Always",
+          "terminationGracePeriodSeconds": 3600,
+          "dnsPolicy": "ClusterFirst",
+          "serviceAccountName": "patroni-spilo",
+          "serviceAccount": "patroni-spilo",
+          "securityContext": {},
+          "imagePullSecrets": [{ "name": "dev-github-read-packages-creds" }],
+          "affinity": {
+            "podAntiAffinity": {
+              "preferredDuringSchedulingIgnoredDuringExecution": [
+                {
+                  "weight": 100,
+                  "podAffinityTerm": {
+                    "labelSelector": {
+                      "matchLabels": {
+                        "app": "patroni-spilo",
+                        "release": "patroni-spilo"
+                      }
+                    },
+                    "topologyKey": "kubernetes.io/hostname"
+                  }
+                }
+              ]
+            }
+          },
+          "schedulerName": "default-scheduler"
+        }
+      },
+      "volumeClaimTemplates": [
+        {
+          "kind": "PersistentVolumeClaim",
+          "apiVersion": "v1",
+          "metadata": {
+            "name": "storage-volume",
+            "creationTimestamp": null,
+            "labels": {
+              "app": "patroni-spilo",
+              "heritage": "Helm",
+              "release": "patroni-spilo"
+            }
+          },
+          "spec": {
+            "accessModes": ["ReadWriteOnce"],
+            "resources": { "requests": { "storage": "1G" } },
+            "storageClassName": "netapp-block-standard",
+            "volumeMode": "Filesystem"
+          },
+          "status": { "phase": "Pending" }
+        }
+      ],
+      "serviceName": "patroni-spilo",
+      "podManagementPolicy": "OrderedReady",
+      "updateStrategy": {
+        "type": "RollingUpdate",
+        "rollingUpdate": { "partition": 0 }
+      },
+      "revisionHistoryLimit": 10
+    },
+    "status": {
+      "observedGeneration": 1538,
+      "replicas": 3,
+      "readyReplicas": 3,
+      "currentReplicas": 3,
+      "updatedReplicas": 3,
+      "currentRevision": "patroni-spilo-67b4b665f6",
+      "updateRevision": "patroni-spilo-67b4b665f6",
+      "collisionCount": 0
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "type": "ADDED",
+  "object": {
+    "kind": "PartialObjectMetadata",
+    "apiVersion": "meta.k8s.io/v1",
+    "metadata": {
+      "name": "aps-cicd-ocp-tkn-terraform-pipeline-deployment-b8840c-dev-7f7xk",
+      "generateName": "aps-cicd-ocp-tkn-terraform-pipeline-deployment-b8840c-dev-",
+      "namespace": "b8840c-tools",
+      "uid": "308d3b0e-42df-476c-9611-fc8cb7b4552c",
+      "resourceVersion": "931903937",
+      "generation": 1,
+      "creationTimestamp": "2022-05-20T12:02:11Z",
+      "labels": {
+        "app.kubernetes.io/instance": "aps-cicd",
+        "app.kubernetes.io/managed-by": "Helm",
+        "app.kubernetes.io/name": "ocp-tkn-terraform-pipeline",
+        "app.kubernetes.io/version": "1.0.0",
+        "helm.sh/chart": "ocp-tkn-terraform-pipeline-1.0.4",
+        "heritage": "Helm",
+        "tekton.dev/pipeline": "aps-cicd-ocp-tkn-terraform-pipeline",
+        "triggers.tekton.dev/eventlistener": "aps-cicd-ocp-tkn-terraform-pipeline-git-trigger",
+        "triggers.tekton.dev/trigger": "github-listener",
+        "triggers.tekton.dev/triggers-eventid": "c19ab554-8640-435a-a513-0db2ab12f57f"
+      },
+      "annotations": {
+        "meta.helm.sh/release-name": "aps-cicd",
+        "meta.helm.sh/release-namespace": "b8840c-tools"
+      }
+    }
+  }
+}

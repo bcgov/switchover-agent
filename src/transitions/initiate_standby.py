@@ -51,13 +51,13 @@ def initiate_standby(logic_context, py_env: str, final_state: str):
     else:
         logic_context.clear_triggers()
 
+        update_patroni_spilo_env_vars(
+            True, py_env)
+
         scale_and_wait(ns, 'statefulset',
                        config.get('statefulset_patroni'),
                        "app=%s" % config.get('statefulset_patroni'),
                        0, py_env)
-
-        update_patroni_spilo_env_vars(
-            True, py_env)
 
         delete_pvc(ns, 'storage-volume-patroni-spilo-0', py_env)
         delete_configmap(ns, 'patroni-spilo-config', py_env)

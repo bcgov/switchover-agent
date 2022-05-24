@@ -30,6 +30,7 @@ async def patroni_query(patroni_url: str, logic_q, GAUGE):
             config.update(inspect_cluster(patroni_url))
             config_str = json.dumps(config)
             if last_result != config_str:
+                logger.debug("New information %s", config_str)
                 message = dict(event="patroni", control="up")
                 message.update(config)
                 logic_q.put(message)

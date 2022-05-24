@@ -60,7 +60,7 @@ async def watch_stream(namespace: str, kind: str, label_selector: str, py_env: s
             traceback.print_exc(file=sys.stdout)
             time.sleep(5)
         else:
-            logger.warning('Watch died gracefully, starting back up')
+            logger.debug('Watch died gracefully, starting back up')
 
 def init_client(py_env: str):
     if py_env == 'production':

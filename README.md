@@ -56,6 +56,64 @@ And then once the Active site is ready to return to normal operation, the `Switc
 
 ### Installation
 
+#### Docker
+
+```
+docker build --tag switchover.local -f Dockerfile .
+
+export TLS_CA=\_tmp/rootCA.crt
+export TLS_LOCAL_CRT=\_tmp/switchover-peer-gold.crt
+export TLS_LOCAL_KEY=\_tmp/switchover-peer-gold.key
+
+export PEER_HOST=127.0.0.1
+export PEER_PORT=8765
+
+export PROCESS_LIST="logic_handler,peer_server,peer_client,peer_client_fwd,dns_watch,kube_watch"
+
+-- dns_watch
+export GSLB_DOMAIN=ggw.dev.api.gov.bc.ca.glb.gov.bc.ca
+
+-- kube_watch
+export ENVIRONMENT=local
+export KUBE_CLUSTER=gold
+export KUBE_NAMESPACE=b8840c-dev
+export KUBE_HEALTH_NAMESPACE=b8840c-tools
+export KUBE_TEKTON_NAMESPACE=b8840c-tools
+
+-- initialize the switchover-state configmap
+echo '
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: switchover-state-local
+  namespace: b8840c-tools
+  labels:
+    app: switchover
+    env: local
+    name: switchover-config
+data:
+  last_stable_state: ""
+  last_stable_state_ts: ""
+  transition: ""
+' | kubectl apply -f -
+
+-- NOTE: the Peer is itself
+docker run -ti --rm \
+ -p 3303:80 \
+ -v `pwd`/\_tmp/pycache:/.cache \
+ -v `pwd`/\_tmp:/app/\_tmp \
+ -v /Users/aidancope/.kube:/root/.kube \
+ -e TLS_CA -e TLS_LOCAL_CRT -e TLS_LOCAL_KEY \
+ -e PEER_HOST -e PEER_PORT \
+ -e PROCESS_LIST \
+ -e GSLB_DOMAIN \
+ -e KUBE_CLUSTER -e KUBE_NAMESPACE -e KUBE_HEALTH_NAMESPACE \
+ -e KUBE_TEKTON_NAMESPACE -e ENVIRONMENT \
+ -e PY_ENV=local \
+switchover.local
+
+```
+
 #### Poetry
 
 ```bash
@@ -79,6 +137,45 @@ poetry install
 ```
 poetry run python src/main.py
 ```
+
+#### Testing
+
+```
+openssl genrsa -out switchover-peer.key 2048
+
+export EXT='[ req ]\nprompt = no\ndistinguished_name = dn\nreq_extensions = req_ext\n\n[ dn ]\nCN = switchover\n\n[ req_ext ]\nextendedKeyUsage = serverAuth\nsubjectAltName = @alt_names\n\n[ alt_names ]\nDNS.1 = agent-active.localtest.me\nDNS.3 = agent-passive.localtest.me\n\n'
+
+openssl req -new -sha256 \
+ -key switchover-peer.key \
+ -extensions req_ext \
+ -config <(printf "$EXT") \
+ -out switchover-peer.csr
+
+openssl x509 -req -in switchover-peer.csr \
+ -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
+ -extensions req_ext \
+ -extfile <(printf "$EXT") \
+ -out switchover-peer.crt -days 500 -sha256
+```
+
+```
+
+docker compose build
+docker compose up
+
+curl -v http://localhost:6664/phase/transition-to-golddr-primary -X PUT
+curl -v http://localhost:6664/phase/transition-to-gold-standby -X PUT
+curl -v http://localhost:6664/phase/transition-to-active-passive -X PUT
+
+curl -v http://localhost:6664/initiate/dns_lookup_error -X PUT
+```
+
+#### Test Scenario - Active Network Error
+
+- Exclude the `peer_client_fwd` process from starting to simulate a loss of connectivity between active and passive
+- call: `curl -v http://localhost:6664/initiate/dns_lookup_error -X PUT`
+
+At this point, active is in `golddr-primary` and passive is in `active-passive`.
 
 ## Configuration
 
@@ -107,6 +204,7 @@ poetry run python src/main.py
 | MAINTENANCE_URL          | Endpoint for the PUT /maintenance/:status and GET /maintenance        |
 | PROMETHEUS_MULTIPROC_DIR | Prometheus transient collector db                                     |
 | PROCESS_LIST             | Comma-delimited list of processes to start.                           |
+| DNS_SERVICE_URL          | Only used for local testing to replace the socket DNS call            |
 | LOG_LEVEL                | Comma-delimited list of categories and their log levels               |
 |                          | Example: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'       |
 

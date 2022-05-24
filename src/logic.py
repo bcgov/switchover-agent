@@ -101,6 +101,7 @@ class Logic:
 
                 if item['event'] == 'patroni':
                     self.patroni = item
+                    logger.debug("[patroni] %s", item)
                     if item['control'] == 'up':
                         self.METRIC.labels(
                             resource="patroni", state=("IsStandby=%s" % item['is_standby_configured'])).inc()
@@ -131,6 +132,7 @@ class Logic:
 
                 if item['event'] == 'dns':
                     dns = item['result']
+                    logger.debug("DNS resolution: %s", dns)
                     if dns == config.get('active_ip'):
                         self.METRIC.labels(
                             resource="dns", state="active/%s" % dns).inc()
@@ -185,7 +187,7 @@ class Logic:
                           fwd_to_peer_q.put({"event": "from_peer", "message": {
                                 "event": "yes_happy_to_proceed", "item": item['message']['item']}})
                         else:
-                          logger.warn("From peer - confirmation FAILED - not in %s" % item['message']['required_state'])
+                          logger.warn("From peer - confirmation FAILED - not in %s (%s)", item['message']['required_state'], last_switchover_state)
 
                     if item['message']['event'] == 'yes_happy_to_proceed':
                         logger.debug(
@@ -210,6 +212,8 @@ class Logic:
                         self.GAUGE.labels(resource="transition").set(0)
 
                     elif transition != item['data']['last_stable_state']:
+                        logger.info("transitioning to %s", transition)
+                        
                         self.GAUGE.labels(resource="transition").set(1)
 
                         last_stable_state = item['data']['last_stable_state']

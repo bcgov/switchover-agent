@@ -150,6 +150,7 @@ logging.getLogger('websockets').setLevel(logging.INFO)
 logging.getLogger('asyncio').setLevel(logging.INFO)
 logging.getLogger('urllib3').setLevel(logging.INFO)
 logging.getLogger('fastapi').setLevel(logging.INFO)
+logging.getLogger('kubernetes').setLevel(logging.DEBUG)
 
 log_level = os.getenv('LOG_LEVEL', '')
 for level in log_level.split(','):
@@ -190,6 +191,7 @@ if __name__ == '__main__':
 
     if is_enabled('dns_watch'):
         t = Process(target=dns_watch, args=(
+            os.environ.get("DNS_SERVICE_URL"),
             os.environ.get("GSLB_DOMAIN"),
             logic_q
         ))
