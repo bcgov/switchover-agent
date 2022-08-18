@@ -161,9 +161,20 @@ class Logic:
                             'passive_site') and dns == config.get('passive_ip'))
 
                         if check_active_site or check_passive_site:
-                            logger.warn("Transitioning to golddr-primary")
-                            self.update_switchover_state(
-                                None, 'golddr-primary', None, py_env)
+                            ns = config['switchover_namespace']
+
+                            cmConfig = get_configmap(ns, config['switchover_state_label_selector'], py_env)
+                            currentConfig = cmConfig.data
+                            if currentConfig['last_stable_state'] == 'active-passive':
+                              logger.warn("Transitioning to golddr-primary from active-passive")
+                              self.update_switchover_state(
+                                  None, 'golddr-primary', None, py_env)
+                            elif currentConfig['transition'] == 'golddr-primary':
+                              logger.info("Already transitioning to golddr-primary from %s" % currentConfig['last_stable_state'])
+                            elif currentConfig['last_stable_state'] == 'golddr-primary' or currentConfig['last_stable_state'] == 'gold-standby':
+                              logger.info("Already in desired state %s" % currentConfig['last_stable_state'])
+                            else:
+                              logger.warn("Ignoring auto failover %s" % currentConfig['last_stable_state'])
                     else:
                         self.GAUGE.labels(resource="automation").set(0)
 

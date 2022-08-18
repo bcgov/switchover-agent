@@ -138,6 +138,23 @@ poetry install
 poetry run python src/main.py
 ```
 
+#### Mock Testing
+
+```
+docker compose up
+
+curl -v http://127.0.0.1:6664/phase/transition-to-golddr-primary -X PUT
+curl -v http://127.0.0.1:6664/phase/transition-to-gold-standby -X PUT
+curl -v http://127.0.0.1:6664/phase/transition-to-active-passive -X PUT
+
+-- Active Mock Activity
+curl -v http://127.0.0.1:6664/activity -X GET
+
+-- Passive Mock Activity
+curl -v http://127.0.0.1:6665/activity -X GET
+
+```
+
 #### Testing
 
 ```
