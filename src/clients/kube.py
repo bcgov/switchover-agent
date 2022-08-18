@@ -64,9 +64,12 @@ async def watch_stream(namespace: str, kind: str, label_selector: str, py_env: s
 
 def get_configmap(namespace: str, label_selector: str, py_env: str):
     v1 = init_client(py_env)
-
+    logger.debug("[get_configmap] %s %s", namespace, label_selector)
     configmaps = v1.list_namespaced_config_map(
         namespace=namespace, label_selector=label_selector)
+    if len(configmaps.items) == 0:
+      raise Exception("Configmap not found")
+      
     return configmaps.items[0]
 
 

@@ -21,7 +21,7 @@ from logic import Logic
 from clients.dns import dns_watch
 from clients.kube import patch_secret
 from clients.kube_stream import kube_stream_watch
-from clients.kube import kube_watch, restart_deployment
+from clients.kube import kube_watch, restart_deployment, get_configmap
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
 from clients.prom import prom_server
@@ -136,6 +136,13 @@ def keycloak_service_flow_get():
 def keycloak_service_block_get():
     keycloak_service_block()
     return {"done": "true"}
+
+@app.get("/configmap")
+def configmap():
+    namespace = os.environ.get("KUBE_HEALTH_NAMESPACE")
+    py_env = os.environ.get("PY_ENV")
+    cm = get_configmap(namespace, config['switchover_state_label_selector'], py_env)
+    return {"data": cm.data, "other": cm.data['last_stable_state']}
 
 
 def fastapi():
