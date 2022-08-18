@@ -169,6 +169,8 @@ class Logic:
                               logger.warn("Transitioning to golddr-primary from active-passive")
                               self.update_switchover_state(
                                   None, 'golddr-primary', None, py_env)
+                            elif currentConfig['transition'] == 'golddr-primary':
+                              logger.info("Already transitioning to golddr-primary from %s" % currentConfig['last_stable_state'])
                             elif currentConfig['last_stable_state'] == 'golddr-primary' or currentConfig['last_stable_state'] == 'gold-standby':
                               logger.info("Already in desired state %s" % currentConfig['last_stable_state'])
                             else:
