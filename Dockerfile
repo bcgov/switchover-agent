@@ -1,4 +1,4 @@
-FROM python:3.7.10-alpine
+FROM python:3.11-alpine
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
 
 COPY ./pyproject.toml /tmp/
 
-COPY ./poetry.lock /tmp/
+#COPY ./poetry.lock /tmp/
 
 RUN cd /tmp && poetry install --no-root --no-dev
 
