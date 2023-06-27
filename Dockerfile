@@ -1,21 +1,18 @@
-FROM python:3.7.10-alpine
+FROM python:3.9-alpine
 
 WORKDIR /app
 
-RUN apk add curl
+RUN apk add curl build-base python3-dev libffi-dev
 
 RUN python -m pip install --upgrade pip
 
 ENV XDG_CONFIG_HOME=/var
 
 RUN cd /tmp && \
-  curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py > get-poetry.py && \
-  POETRY_HOME=/opt/poetry python get-poetry.py --version 1.0.8 && \
-  cd /usr/local/bin && \
-  chmod +x /opt/poetry/bin/poetry && \
-  ln -s /opt/poetry/bin/poetry && \
-  poetry config virtualenvs.create false && \
-  chmod g+r /var/pypoetry/config.toml
+  curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 
+
+RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
+  poetry config virtualenvs.create false
 
 COPY ./pyproject.toml /tmp/
 
