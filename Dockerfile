@@ -9,7 +9,7 @@ RUN python -m pip install --upgrade pip
 ENV XDG_CONFIG_HOME=/var
 
 RUN cd /tmp && \
-  curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 
+  curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 - --version 1.0.8
 
 RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
   poetry config virtualenvs.create false && \
