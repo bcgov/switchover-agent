@@ -1,4 +1,4 @@
-FROM python:3.9-alpine
+FROM python:3.11-alpine
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN python -m pip install --upgrade pip
 ENV XDG_CONFIG_HOME=/var
 
 RUN cd /tmp && \
-  curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 
+  curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 - --version 1.0.8
 
 RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
   poetry config virtualenvs.create false && \
@@ -17,7 +17,7 @@ RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
 
 COPY ./pyproject.toml /tmp/
 
-COPY ./poetry.lock /tmp/
+#COPY ./poetry.lock /tmp/
 
 RUN cd /tmp && poetry install --no-root --no-dev
 
