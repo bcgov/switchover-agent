@@ -28,7 +28,7 @@ config = dict(
     configmap_patroni='patroni-spilo-config',
     configmap_patroni_replicas=3,
     configmap_patroni_env_vars='patroni-spilo-env-vars',
-    tekton_label_selector='triggers.tekton.dev/eventlistener=aps-cicd-ocp-tkn-terraform-pipeline-git-trigger',
+    tekton_label_selector=os.environ.get("TEKTON_LABEL_SELECTOR"),
     tekton_namespace=os.environ.get("KUBE_TEKTON_NAMESPACE"),
     tekton_trigger_url=os.environ.get("TEKTON_URL"),
     tekton_github_ref=os.environ.get("TEKTON_GITHUB_REF"),
