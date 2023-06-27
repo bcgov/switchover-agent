@@ -12,7 +12,8 @@ RUN cd /tmp && \
   curl -sSL https://install.python-poetry.org | POETRY_HOME=/opt/poetry python3 
 
 RUN ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry && \
-  poetry config virtualenvs.create false
+  poetry config virtualenvs.create false && \
+  chmod g+r /var/pypoetry/config.toml
 
 COPY ./pyproject.toml /tmp/
 
