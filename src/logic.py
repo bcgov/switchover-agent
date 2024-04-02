@@ -91,7 +91,7 @@ class Logic:
                                 self.pipeline = dict(
                                     event_id=None, start_ts=None, maintenance=False)
 
-                        if item['data']['type'] != "ADDED":
+                        if item['data']['type'] != "ADDED" and item['data']['type'] != "DELETED":
                             self.PIPELINE.labels(
                                 release=params['release-namespace'], state=status_reason).inc()
 
