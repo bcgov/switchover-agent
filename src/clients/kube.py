@@ -8,6 +8,7 @@ import traceback
 import sys
 import time
 import datetime
+from config import config as switchover_config
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ def scale(namespace: str, kind: str, name: str, replicas: int, py_env: str):
             v1.patch_namespaced_stateful_set_scale(
                 name, namespace, body)
 
-        if name == config.get('deployment_health_api'):
+        if name == switchover_config.get('deployment_health_api'):
             pdb_name = f"{name}-pdb"
             min_available = 1 if replicas > 0 else 0
             update_pdb(namespace, pdb_name, min_available, py_env)
