@@ -271,20 +271,24 @@ def init_apps_client(py_env: str):
         config.load_kube_config()
     return client.AppsV1Api()
 
+def init_policy_client(py_env: str):
+    if py_env == 'production':
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+    return client.PolicyV1Api()
 
 def update_pdb(namespace, name, min_available, py_env):
-    if py_env == 'local':
-        print(f"[LOCAL] Updating PDB {name} in namespace {namespace} with minAvailable: {min_available}")
-        return
+    logger.debug(f"[update_pdb] Updating PDB {name} in namespace {namespace} with minAvailable: {min_available}")
 
+    v1 = init_policy_client(py_env)
     try:
-        api_instance = client.PolicyV1Api()
         body = {
             "spec": {
                 "minAvailable": min_available
             }
         }
-        api_instance.patch_namespaced_pod_disruption_budget(name, namespace, body)
+        v1.patch_namespaced_pod_disruption_budget(name, namespace, body)
         print(f"PDB {name} updated successfully")
     except ApiException as e:
         print(f"Exception when updating PDB: {e}")
