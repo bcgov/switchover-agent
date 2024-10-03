@@ -289,6 +289,6 @@ def update_pdb(namespace, name, min_available, py_env):
             }
         }
         v1.patch_namespaced_pod_disruption_budget(name, namespace, body)
-        print(f"PDB {name} updated successfully")
+        logger.debug(f"PDB {name} updated successfully")
     except ApiException as e:
-        print(f"Exception when updating PDB: {e}")
+        logger.error(f"Exception when updating PDB: {e}")
