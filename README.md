@@ -157,7 +157,7 @@ curl -v http://127.0.0.1:6665/activity -X GET
 
 #### Testing
 
-```
+```sh
 openssl genrsa -out switchover-peer.key 2048
 
 export EXT='[ req ]\nprompt = no\ndistinguished_name = dn\nreq_extensions = req_ext\n\n[ dn ]\nCN = switchover\n\n[ req_ext ]\nextendedKeyUsage = serverAuth\nsubjectAltName = @alt_names\n\n[ alt_names ]\nDNS.1 = agent-active.localtest.me\nDNS.3 = agent-passive.localtest.me\n\n'
@@ -175,7 +175,7 @@ openssl x509 -req -in switchover-peer.csr \
  -out switchover-peer.crt -days 500 -sha256
 ```
 
-```
+```sh
 
 docker compose build
 docker compose up
@@ -277,7 +277,7 @@ openssl x509 -req -in switchover-peer.csr \
  -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
  -extensions req_ext \
  -extfile <(printf "$EXT") \
- -out switchover-peer.crt -days 500 -sha256
+ -out switchover-peer.crt -days 1000 -sha256
 
 openssl x509 -in switchover-peer.crt -text -noout
 

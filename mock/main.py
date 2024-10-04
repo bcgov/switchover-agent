@@ -79,7 +79,7 @@ async def k8s(request: Request, rest_of_path: str, watch: bool = False):
           if last != file:
             last = file
             body = get(CURR, "/data/k8s/%s" % file)
-            logging.warn("SLOW ITER %s %s %s", n, rest_of_path, "/data/k8s/%s" % config['k8s.configmaps'])
+            logging.warning("SLOW ITER %s %s %s", n, rest_of_path, "/data/k8s/%s" % config['k8s.configmaps'])
             yield "%s\n" % body
           # else:
           #   logging.warn("SLOW ITER NOTHING NEW %s" % file)
