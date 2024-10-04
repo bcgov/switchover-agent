@@ -27,15 +27,13 @@ CURR = os.path.dirname(os.path.realpath(__file__))
 
 def get(base: str, path: str):
   f = open("%s%s" % (base, path))
-  return json.dumps(json.load(f))
-  #return f.read()
-
+  return json.load(f)
 
 @app.put("/phase/{phase:str}")
 def phase(request: Request, phase: str):
-  logging.warn("PHASE %s", phase)
+  logging.warning("PHASE %s", phase)
   for k in phases[phase].keys():
-    logging.warn("  -- %-20s = %s", k, phases[phase][k])
+    logging.warning("  -- %-20s = %s", k, phases[phase][k])
     config[k] = phases[phase][k]
   config["activity"].append({"path":"PHASE_CHANGE/%s" % phase, "body": phases[phase] })
   return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -62,10 +60,10 @@ async def k8s(request: Request, rest_of_path: str, watch: bool = False):
       # kubectl get pipelineruns/aps-cicd-ocp-tkn-terraform-pipeline-deployment-b8840c-dev-7f7xk -n b8840c-tools  -v=10
       # kubectl get statefulsets/patroni-spilo -n b8840c-dev -w -v=10
   
-      logging.warn("GET request %s %s", rest_of_path, request)
-      logging.warn("WATCH = %s", watch)
+      logging.warning("GET request /k8s/%s %s", rest_of_path, request)
+      logging.warning("WATCH = %s", watch)
       
-      def slow_iter(count: int, rest_of_path: str):
+      def slow_iter(count: int, watch, rest_of_path: str):
         last = None
         for n in range(count):
           paths = {
@@ -79,16 +77,23 @@ async def k8s(request: Request, rest_of_path: str, watch: bool = False):
           if last != file:
             last = file
             body = get(CURR, "/data/k8s/%s" % file)
-            logging.warning("SLOW ITER %s %s %s", n, rest_of_path, "/data/k8s/%s" % config['k8s.configmaps'])
-            yield "%s\n" % body
+            if watch is False:
+               logging.warning("Return LIST %s" % file)
+               body = {
+                  "items": [
+                     body["object"]
+                  ]
+               }
+            logging.warning("STREAM EVENT: %s %s %s", n, rest_of_path, "/data/k8s/%s" % config['k8s.configmaps'])
+            yield "%s\n" % json.dumps(body)
           # else:
-          #   logging.warn("SLOW ITER NOTHING NEW %s" % file)
+          #   logging.warning("SLOW ITER NOTHING NEW %s" % file)
           time.sleep(2)
 
       if watch:
-        return StreamingResponse(slow_iter(1000, rest_of_path), media_type="application/json")
+        return StreamingResponse(slow_iter(1000, watch, rest_of_path), media_type="application/json")
       else:
-        return StreamingResponse(slow_iter(1, rest_of_path), media_type="application/json")
+        return StreamingResponse(slow_iter(1, watch, rest_of_path), media_type="application/json")
       
       # mocks[rest_of_path] = { "query": dict(request.query_params) }
       # logging.error(json.dumps(mocks, indent=4))
@@ -108,9 +113,9 @@ async def k8s(request: Request, rest_of_path: str, watch: bool = False):
 
 @app.patch("/k8s/{rest_of_path:path}")
 async def k8s_patch(request: Request, rest_of_path: str):
-    logging.warn("--")
-    logging.warn("--")
-    logging.warn("PATCH request %s %s",rest_of_path, request)
+    logging.warning("--")
+    logging.warning("--")
+    logging.warning("PATCH request %s %s",rest_of_path, request)
     # apis/apps/v1/namespaces/000000-tools/deployments/bcgov-health-api-local-generic-api/scale
     # apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api
     # api/v1/namespaces/000000-dev/services/keycloak-http
@@ -118,7 +123,7 @@ async def k8s_patch(request: Request, rest_of_path: str):
     # apis/apps/v1/namespaces/000000-dev/deployments/konghc-kong
     # apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale
     body = await request.json()
-    logging.warn("-- %s", json.dumps(body, indent=2))
+    logging.warning("-- %s", json.dumps(body, indent=2))
     config["activity"].append({"path":rest_of_path, "body": body })
     
     if rest_of_path == 'api/v1/namespaces/000000-tools/configmaps/switchover-state-local':
@@ -131,7 +136,7 @@ async def k8s_patch(request: Request, rest_of_path: str):
       elif body['data']['transition'] == 'golddr-primary' and body['data']['maintenance'] is None:
         config['k8s.configmaps'] = "configmaps-transition-golddr-primary.json"
       elif body['data']['transition'] == "":
-        logging.warn("-- DO NOTHING ON MOCK")
+        logging.warning("-- DO NOTHING ON MOCK")
       return Response(status_code=status.HTTP_204_NO_CONTENT)
     elif rest_of_path == 'apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale':
       patroni_config = get(CURR, "/data/patroni/%s" % config['patroni.config'])
@@ -165,7 +170,7 @@ async def delete(request: Request, rest_of_path: str):
 
     body = None
     #body = await request.json()
-    #logging.warn("-- %s", json.dumps(body, indent=2))
+    #logging.warning("-- %s", json.dumps(body, indent=2))
     config["activity"].append({"path":rest_of_path, "body": body })
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -173,7 +178,7 @@ async def delete(request: Request, rest_of_path: str):
 
 @app.get("/patroni/{rest_of_path:path}")
 def patroni(request: Request, rest_of_path: str):
-    logging.info("GET request %s",rest_of_path)
+    logging.info("GET request /patroni/%s",rest_of_path)
 
     
     if rest_of_path == 'config':
@@ -199,7 +204,7 @@ def maintenance(request: Request, rest_of_path: str):
 
 @app.get("/dns")
 def dns(request: Request):
-    logging.info("GET request %s", request)
+    logging.info("GET request /dns %s", request)
     
     return Response(content=get(CURR, "/data/dns/%s" % config['dns']))
 
