@@ -1,6 +1,6 @@
 import logging
 from config import config
-from clients.kube import update_configmap
+from clients.kube import scale, update_configmap, update_pdb
 from clients.kube import restart_deployment, patch_secret
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
 from clients.maintenance import set_maintenance
@@ -49,6 +49,12 @@ def maintenance_off(py_env_ignored: str):
     logger.debug("MAINTENANCE OFF - OK")
 
     MAINT.set(0)
+
+def scale_health_api(namespace: str, deployment_name: str, replicas: int, py_env: str):
+    scale(namespace, 'deployment', deployment_name, replicas, py_env)
+    
+    min_available = 1 if replicas > 0 else 0
+    update_pdb(namespace, deployment_name + '-pdb', min_available, py_env)
 
 # Setting the in_recovery indicator on the pipeline will force in_maintenance to False
 def set_in_recovery(state: bool, py_env: str):
