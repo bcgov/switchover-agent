@@ -88,7 +88,7 @@ class Logic:
                                 if self.pipeline['maintenance']:
                                     maintenance_on()
                                 elif status_reason == "Failed" or status_reason == "PipelineRunCancelled":
-                                    logger.info("Pipeline Failed or Cancelled - keeping maintenance on")
+                                    logger.error("Pipeline Failed or Cancelled - keeping maintenance on")
                                 else:
                                     maintenance_off(py_env)
                                 self.pipeline = dict(

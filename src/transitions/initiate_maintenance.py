@@ -1,7 +1,6 @@
 import logging
 import logging
-from clients.kube import scale, update_pdb
-from transitions.shared import set_in_maintenance
+from transitions.shared import scale_health_api, set_in_maintenance
 from transitions.initiate_primary import deploy_primary
 from config import config
 
@@ -16,8 +15,7 @@ logger = logging.getLogger(__name__)
 
 def initiate_passive_maintenance(logic_context, patroni_local_url: str, py_env: str):
     set_in_maintenance(True, py_env)
-    scale(config.get('kube_health_namespace'), 'deployment',
-          config.get('deployment_health_api'), 0, py_env)
-    update_pdb(config.get('kube_health_namespace'), 
-               config.get('deployment_health_api') + '-pdb', 0, py_env)
+    scale_health_api(config.get('kube_health_namespace'), 
+                     config.get('deployment_health_api'), 
+                     0, py_env)
     return deploy_primary(logic_context, patroni_local_url, py_env)
