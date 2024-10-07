@@ -47,12 +47,12 @@ And then once the Active site is ready to return to normal operation, the `Switc
 - Scale Keycloak (and its dependencies) up and wait for ready
 - Deactivate Maintenance messaging
 
-## Development
-
-### Dependencies
+## Dependencies
 
 - Docker
 - Kubernetes
+
+## Development
 
 ### Local Installation (Docker)
 
@@ -120,7 +120,7 @@ brew update
 brew install pyenv
 pyenv install 3.9
 pyenv global 3.9
-curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+curl -sSL https://install.python-poetry.org > get-poetry.py | python
 ```
 
 #### Requirements
@@ -139,26 +139,11 @@ poetry run python src/main.py
 
 ### Testing
 
-#### Mock Testing
-
-```
-docker compose up
-
-curl -v http://127.0.0.1:6664/phase/transition-to-golddr-primary -X PUT
-curl -v http://127.0.0.1:6664/phase/transition-to-gold-standby -X PUT
-curl -v http://127.0.0.1:6664/phase/transition-to-active-passive -X PUT
-
--- Active Mock Activity
-curl -v http://127.0.0.1:6664/activity -X GET
-
--- Passive Mock Activity
-curl -v http://127.0.0.1:6665/activity -X GET
-
-```
-
-#### Testing
-
 ```sh
+# Generate new TLS certificates if expired
+
+cd local/tls
+
 openssl genrsa -out switchover-peer.key 2048
 
 export EXT='[ req ]\nprompt = no\ndistinguished_name = dn\nreq_extensions = req_ext\n\n[ dn ]\nCN = switchover\n\n[ req_ext ]\nextendedKeyUsage = serverAuth\nsubjectAltName = @alt_names\n\n[ alt_names ]\nDNS.1 = agent-active.localtest.me\nDNS.3 = agent-passive.localtest.me\n\n'
@@ -181,10 +166,18 @@ openssl x509 -req -in switchover-peer.csr \
 docker compose build
 docker compose up
 
+# Manually trigger transitions
 curl -v http://localhost:6664/phase/transition-to-golddr-primary -X PUT
 curl -v http://localhost:6664/phase/transition-to-gold-standby -X PUT
 curl -v http://localhost:6664/phase/transition-to-active-passive -X PUT
 
+# Retrieve Active Mock Activity
+curl -v http://127.0.0.1:6664/activity -X GET
+
+# Retrieve Passive Mock Activity
+curl -v http://127.0.0.1:6665/activity -X GET
+
+# Automatically trigger failover to passive
 curl -v http://localhost:6664/initiate/dns_lookup_error -X PUT
 ```
 
