@@ -134,11 +134,6 @@ def scale(namespace: str, kind: str, name: str, replicas: int, py_env: str):
             v1.patch_namespaced_stateful_set_scale(
                 name, namespace, body)
 
-        if name == switchover_config.get('deployment_health_api'):
-            pdb_name = f"{name}-pdb"
-            min_available = 1 if replicas > 0 else 0
-            update_pdb(namespace, pdb_name, min_available, py_env)
-
         logger.debug("Scaled %s %s : %s" % (kind, name, body))
     except ApiException as e:
         logger.error(
@@ -292,3 +287,4 @@ def update_pdb(namespace, name, min_available, py_env):
         logger.debug(f"PDB {name} updated successfully")
     except ApiException as e:
         logger.error(f"Exception when updating PDB: {e}")
+        raise
