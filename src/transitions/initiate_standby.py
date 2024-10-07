@@ -1,6 +1,6 @@
 import logging
 import datetime
-from clients.kube import scale
+from clients.kube import scale, update_pdb
 from clients.patroni import set_readonly_cluster, set_primary_cluster
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.tekton import trigger_tekton_build
@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 def initiate_active_standby(logic_context, py_env: str):
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
+    update_pdb(config.get('kube_health_namespace'), 
+               config.get('deployment_health_api') + '-pdb', 0, py_env)
     return initiate_standby(logic_context,
                             py_env, 'gold-standby')
 
@@ -22,6 +24,8 @@ def initiate_passive_standby(logic_context, py_env: str):
     set_in_recovery(False, py_env)
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
+    update_pdb(config.get('kube_health_namespace'), 
+               config.get('deployment_health_api') + '-pdb', 1, py_env)
     return initiate_standby(logic_context,
                             py_env, 'active-passive')
 

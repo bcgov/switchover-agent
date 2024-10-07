@@ -1,6 +1,6 @@
 import logging
 import datetime
-from clients.kube import scale
+from clients.kube import scale, update_pdb
 from clients.patroni import set_readonly_cluster, set_primary_cluster
 from clients.tekton import trigger_tekton_build
 from transitions.shared import maintenance_on, set_in_recovery, update_patroni_spilo_env_vars
@@ -26,6 +26,9 @@ def initiate_active_primary(logic_context, patroni_local_url: str, py_env: str):
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 2, py_env)
+    
+    update_pdb(config.get('kube_health_namespace'), 
+               config.get('deployment_health_api') + '-pdb', 1, py_env)
 
     return deploy_primary(logic_context, patroni_local_url, py_env)
 

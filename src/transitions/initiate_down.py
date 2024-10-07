@@ -1,6 +1,6 @@
 import logging
 from clients.tekton import trigger_tekton_build
-from clients.kube import scale, restart_deployment
+from clients.kube import scale, restart_deployment, update_pdb
 from transitions.shared import maintenance_on, maintenance_off, set_in_recovery
 from config import config
 
@@ -16,6 +16,9 @@ def initiate_active_down(py_env: str):
 
     scale(config.get('kube_health_namespace'), 'deployment',
           config.get('deployment_health_api'), 0, py_env)
+    
+    update_pdb(config.get('kube_health_namespace'), 
+               config.get('deployment_health_api') + '-pdb', 0, py_env)
 
     maintenance_on()
 

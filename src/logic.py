@@ -78,7 +78,8 @@ class Logic:
 
                             if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
 
-                                logger.info("End State for Pipeline!")
+                                logger.info("End State for Pipeline - %s" 
+                                            % status_reason)
                                 logger.info("Tekton Start: %s" %
                                             self.pipeline['start_ts'])
                                 logger.info("Tekton   End: %s" %
@@ -86,6 +87,8 @@ class Logic:
                                 # set the maintenance mode appropriately
                                 if self.pipeline['maintenance']:
                                     maintenance_on()
+                                elif status_reason == "Failed" or status_reason == "PipelineRunCancelled":
+                                    logger.info("Pipeline Failed or Cancelled - keeping maintenance on")
                                 else:
                                     maintenance_off(py_env)
                                 self.pipeline = dict(
