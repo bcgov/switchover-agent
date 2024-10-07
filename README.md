@@ -47,16 +47,14 @@ And then once the Active site is ready to return to normal operation, the `Switc
 - Scale Keycloak (and its dependencies) up and wait for ready
 - Deactivate Maintenance messaging
 
-## Getting Started
+## Development
 
 ### Dependencies
 
 - Docker
 - Kubernetes
 
-### Installation
-
-#### Docker
+### Local Installation (Docker)
 
 ```
 docker build --tag switchover.local -f Dockerfile .
@@ -113,14 +111,15 @@ docker run -ti --rm \
 switchover.local
 
 ```
+### Local Installation (Native)
 
 #### Poetry
 
 ```bash
 brew update
 brew install pyenv
-pyenv install 3.7
-pyenv global 3.7
+pyenv install 3.9
+pyenv global 3.9
 curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
 ```
 
@@ -128,7 +127,7 @@ curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poet
 
 ```bash
 export PATH="$HOME/.poetry/bin:$PATH"
-poetry env use 3.7
+poetry env use 3.9
 poetry install
 ```
 
@@ -137,6 +136,8 @@ poetry install
 ```
 poetry run python src/main.py
 ```
+
+### Testing
 
 #### Mock Testing
 
