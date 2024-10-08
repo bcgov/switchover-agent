@@ -378,7 +378,7 @@ class Logic:
                             elif cluster == config.get('passive_site'):
 
                                 initiate_passive_maintenance(self,
-                                                             namespace, patroni_local_url, py_env)
+                                                              patroni_local_url, py_env)
                                 next_state = transition
 
                             self.update_switchover_state(
