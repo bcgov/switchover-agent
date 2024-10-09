@@ -1,60 +1,59 @@
 {
-  "items": [
-    {
-      "kind": "Service",
-      "apiVersion": "v1",
-      "metadata": {
-        "name": "keycloak-http",
-        "namespace": "b8840c-dev",
-        "uid": "dcc9a5af-525b-4541-8c7b-d024a6194ba7",
-        "resourceVersion": "933900281",
-        "creationTimestamp": "2021-11-04T16:14:59Z",
-        "labels": {
-          "app.kubernetes.io/component": "http",
-          "app.kubernetes.io/instance": "keycloak",
-          "app.kubernetes.io/managed-by": "Helm",
-          "app.kubernetes.io/name": "keycloak",
-          "app.kubernetes.io/version": "15.0-a1507196",
-          "helm.sh/chart": "keycloak-14.0.1"
+  "type": "ADDED",
+  "object": {
+    "kind": "Service",
+    "apiVersion": "v1",
+    "metadata": {
+      "name": "keycloak-http",
+      "namespace": "b8840c-dev",
+      "uid": "dcc9a5af-525b-4541-8c7b-d024a6194ba7",
+      "resourceVersion": "933900281",
+      "creationTimestamp": "2021-11-04T16:14:59Z",
+      "labels": {
+        "app.kubernetes.io/component": "http",
+        "app.kubernetes.io/instance": "keycloak",
+        "app.kubernetes.io/managed-by": "Helm",
+        "app.kubernetes.io/name": "keycloak",
+        "app.kubernetes.io/version": "15.0-a1507196",
+        "helm.sh/chart": "keycloak-14.0.1"
+      },
+      "annotations": {
+        "meta.helm.sh/release-name": "keycloak",
+        "meta.helm.sh/release-namespace": "b8840c-dev"
+      }
+    },
+    "spec": {
+      "ports": [
+        {
+          "name": "http",
+          "protocol": "TCP",
+          "port": 80,
+          "targetPort": "http"
         },
-        "annotations": {
-          "meta.helm.sh/release-name": "keycloak",
-          "meta.helm.sh/release-namespace": "b8840c-dev"
+        {
+          "name": "https",
+          "protocol": "TCP",
+          "port": 8443,
+          "targetPort": "https"
+        },
+        {
+          "name": "http-management",
+          "protocol": "TCP",
+          "port": 9990,
+          "targetPort": "http-management"
         }
+      ],
+      "selector": {
+        "app.kubernetes.io/instance": "keycloak",
+        "app.kubernetes.io/name": "keycloak"
       },
-      "spec": {
-        "ports": [
-          {
-            "name": "http",
-            "protocol": "TCP",
-            "port": 80,
-            "targetPort": "http"
-          },
-          {
-            "name": "https",
-            "protocol": "TCP",
-            "port": 8443,
-            "targetPort": "https"
-          },
-          {
-            "name": "http-management",
-            "protocol": "TCP",
-            "port": 9990,
-            "targetPort": "http-management"
-          }
-        ],
-        "selector": {
-          "app.kubernetes.io/instance": "keycloak",
-          "app.kubernetes.io/name": "keycloak"
-        },
-        "clusterIP": "10.98.94.250",
-        "clusterIPs": ["10.98.94.250"],
-        "type": "ClusterIP",
-        "sessionAffinity": "None",
-        "ipFamilies": ["IPv4"],
-        "ipFamilyPolicy": "SingleStack"
-      },
-      "status": { "loadBalancer": {} }
-    }
-  ]
+      "clusterIP": "10.98.94.250",
+      "clusterIPs": ["10.98.94.250"],
+      "type": "ClusterIP",
+      "sessionAffinity": "None",
+      "ipFamilies": ["IPv4"],
+      "ipFamilyPolicy": "SingleStack"
+    },
+    "status": { "loadBalancer": {} }
+  }
 }

@@ -1,10 +1,10 @@
-version: '3.8'
+version: "3.8"
 
 networks:
   switchover-net: {}
 
-x-common-variables: &common-variables
-  #LOG_LEVEL: websockets.server=WARN,kube=WARN,logic=DEBUG,peers.client=WARN,peers.client_fwd=WARN,peers.server=WARN,clients.dns=WARN,clients.kube=WARN,clients.kube_stream=WARN,root=WARN
+x-common-variables:
+  &common-variables #LOG_LEVEL: websockets.server=WARN,kube=WARN,logic=DEBUG,peers.client=WARN,peers.client_fwd=WARN,peers.server=WARN,clients.dns=WARN,clients.kube=WARN,clients.kube_stream=WARN,root=WARN
   TLS_CA: /config/tls/rootCA.crt
   TLS_LOCAL_CRT: /config/tls/switchover-peer.crt
   TLS_LOCAL_KEY: /config/tls/switchover-peer.key
@@ -28,13 +28,12 @@ x-common-variables: &common-variables
   # DNS_SERVICE_URL: http://mock-active.localtest.me:8000/dns
   KEYCLOAK_SELECTOR: app.kubernetes.io/name=keycloak
 
-
 services:
   switchover-agent-active:
     image: agent.local:latest
     container_name: switchover-agent-active
     ports:
-    - 6666:8000
+      - 6666:8000
     volumes:
       - ./local:/config
       - ./local/kube/active:/root/.kube
@@ -55,7 +54,7 @@ services:
         aliases:
           - agent-active.localtest.me
     depends_on:
-      - mock
+      - mock-active
 
   switchover-agent-passive:
     image: agent.local:latest
@@ -80,7 +79,7 @@ services:
         aliases:
           - agent-passive.localtest.me
     depends_on:
-      - mock
+      - mock-passive
 
   mock-active:
     image: agent-mock.local:latest
@@ -88,7 +87,7 @@ services:
     environment:
       LOG_LEVEL: INFO
     ports:
-    - 6664:8000
+      - 6664:8000
     build:
       context: .
       dockerfile: Dockerfile.mock
@@ -103,7 +102,7 @@ services:
     environment:
       LOG_LEVEL: INFO
     ports:
-    - 6665:8000
+      - 6665:8000
     build:
       context: .
       dockerfile: Dockerfile.mock

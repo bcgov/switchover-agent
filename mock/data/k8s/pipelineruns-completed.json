@@ -1,5 +1,5 @@
 {
-  "type": "ADDED",
+  "type": "MODIFIED",
   "object": {
     "kind": "PipelineRun",
     "apiVersion": "tekton.dev/v1",
@@ -39,6 +39,15 @@
         "meta.helm.sh/release-name": "aps-cicd",
         "meta.helm.sh/release-namespace": "b8840c-tools"
       }
+    },
+    "status": {
+      "conditions": [
+        {
+          "reason": "Completed",
+          "status": "True",
+          "message": "Tasks Completed: 5 (Failed: 0, Cancelled 0), Skipped: 1"
+        }
+      ]
     }
   }
 }
