@@ -101,6 +101,39 @@
     }
   },
   {
+    "path": "api/v1/namespaces/000000-dev/services/keycloak-http",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "selector": {
+          "app": null,
+          "app.kubernetes.io/instance": "keycloak",
+          "app.kubernetes.io/name": "keycloak"
+        }
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "MAINTENANCE",
+    "method": "PUT",
+    "body": "maintenance/false"
+  },
+  {
     "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
     "method": "PATCH",
     "body": {

@@ -231,6 +231,8 @@ async def tekton(request: Request):
     body = await request.json()
     config["activity"].append({"path":"TEKTON/TRIGGER", "method": "POST", "body": body })
 
+    config['k8s.pipelineruns'] = 'pipelineruns-completed.json'
+
     return { "eventID": "0000-0000-0000"}
   
 
