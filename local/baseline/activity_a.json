@@ -394,7 +394,7 @@
       "data": {
         "last_stable_state": "active-passive",
         "last_stable_state_ts": "2020-01-01T00:00:00",
-        "transition": "TEST_FAILING_ACTION",
+        "transition": "",
         "maintenance": null
       }
     }
