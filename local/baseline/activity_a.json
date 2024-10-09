@@ -1,0 +1,402 @@
+[
+  {
+    "path": "PHASE_CHANGE/transition-to-golddr-primary",
+    "body": {
+      "dns": "active.json",
+      "k8s.configmaps": "configmaps-transition-golddr-primary.json",
+      "k8s.pipelineruns": "pipelineruns.json",
+      "patroni.cluster": "cluster.json",
+      "patroni.config": "config.json"
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/secrets/terraform-pipeline-local-tfvars",
+    "method": "PATCH",
+    "body": {
+      "stringData": {
+        "in_recovery": "true",
+        "in_maintenance": "false"
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-tools/deployments/bcgov-health-api-local-generic-api/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 0
+      }
+    }
+  },
+  {
+    "path": "apis/policy/v1/namespaces/000000-tools/poddisruptionbudgets/bcgov-health-api-local-generic-api-pdb",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "minAvailable": 0
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/services/keycloak-http",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "selector": {
+          "app": "keycloak-maintenance-page",
+          "app.kubernetes.io/instance": null,
+          "app.kubernetes.io/name": null
+        }
+      }
+    }
+  },
+  {
+    "path": "MAINTENANCE",
+    "method": "PUT",
+    "body": "maintenance/true"
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/konghc-kong",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "golddr-primary",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  },
+  {
+    "path": "PHASE_CHANGE/transition-to-gold-standby",
+    "body": {
+      "dns": "passive.json",
+      "k8s.configmaps": "configmaps-transition-gold-standby.json",
+      "k8s.pipelineruns": "pipelineruns.json",
+      "patroni.cluster": "cluster.json",
+      "patroni.config": "config.json"
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "golddr-primary",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-tools/deployments/bcgov-health-api-local-generic-api/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 0
+      }
+    }
+  },
+  {
+    "path": "apis/policy/v1/namespaces/000000-tools/poddisruptionbudgets/bcgov-health-api-local-generic-api-pdb",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "minAvailable": 0
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/services/keycloak-http",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "selector": {
+          "app": "keycloak-maintenance-page",
+          "app.kubernetes.io/instance": null,
+          "app.kubernetes.io/name": null
+        }
+      }
+    }
+  },
+  {
+    "path": "MAINTENANCE",
+    "method": "PUT",
+    "body": "maintenance/true"
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/configmaps/patroni-spilo-env-vars",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "STANDBY_HOST": "patroni-peer.local",
+        "STANDBY_PORT": "10000"
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 0
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/persistentvolumeclaims/storage-volume-patroni-spilo-0",
+    "method": "DELETE",
+    "body": null
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/configmaps/patroni-spilo-config",
+    "method": "DELETE",
+    "body": null
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 1
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "gold-standby-partial",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/persistentvolumeclaims/storage-volume-patroni-spilo-1",
+    "method": "DELETE",
+    "body": null
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/persistentvolumeclaims/storage-volume-patroni-spilo-2",
+    "method": "DELETE",
+    "body": null
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 3
+      }
+    }
+  },
+  {
+    "path": "TEKTON/TRIGGER",
+    "method": "POST",
+    "body": {
+      "ref": "refs/heads/deploy/dev",
+      "repository": {
+        "name": "",
+        "clone_url": "https://github.com/bcgov-dss/api-serv-infra.git"
+      },
+      "head_commit": {
+        "id": "",
+        "message": "",
+        "author": {
+          "username": "switchover_agent"
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "gold-standby",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  },
+  {
+    "path": "PHASE_CHANGE/transition-to-active-passive",
+    "body": {
+      "dns": "passive.json",
+      "k8s.configmaps": "configmaps-transition-active-passive.json",
+      "k8s.pipelineruns": "pipelineruns.json",
+      "patroni.cluster": "cluster-standby-3.json",
+      "patroni.config": "config-standby.json"
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "gold-standby",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/secrets/terraform-pipeline-local-tfvars",
+    "method": "PATCH",
+    "body": {
+      "stringData": {
+        "in_recovery": "false",
+        "in_maintenance": "false"
+      }
+    }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/services/keycloak-http",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "selector": {
+          "app": "keycloak-maintenance-page",
+          "app.kubernetes.io/instance": null,
+          "app.kubernetes.io/name": null
+        }
+      }
+    }
+  },
+  {
+    "path": "MAINTENANCE",
+    "method": "PUT",
+    "body": "maintenance/true"
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-tools/deployments/bcgov-health-api-local-generic-api/scale",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "replicas": 2
+      }
+    }
+  },
+  {
+    "path": "apis/policy/v1/namespaces/000000-tools/poddisruptionbudgets/bcgov-health-api-local-generic-api-pdb",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "minAvailable": 1
+      }
+    }
+  },
+  {
+    "path": "/patroni/config",
+    "method": "PATCH",
+    "body": {
+      "standby_cluster": null
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/configmaps/patroni-spilo-env-vars",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "STANDBY_HOST": "",
+        "STANDBY_PORT": ""
+      }
+    }
+  },
+  {
+    "path": "TEKTON/TRIGGER",
+    "method": "POST",
+    "body": {
+      "ref": "refs/heads/deploy/dev",
+      "repository": {
+        "name": "",
+        "clone_url": "https://github.com/bcgov-dss/api-serv-infra.git"
+      },
+      "head_commit": {
+        "id": "",
+        "message": "",
+        "author": {
+          "username": "switchover_agent"
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
+    "method": "PATCH",
+    "body": {
+      "data": {
+        "last_stable_state": "active-passive",
+        "last_stable_state_ts": "2020-01-01T00:00:00",
+        "transition": "",
+        "maintenance": null
+      }
+    }
+  }
+]

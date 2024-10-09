@@ -121,6 +121,7 @@ def set_standby_cluster(patroni_url: str, primary_host: str, primary_port: int):
 
     r = requests.patch('%s/config' %
                        (patroni_url), headers=headers, data=json.dumps(data))
+    r.raise_for_status()
     logger.info("set_standby_cluster %s" % r)
 
 
@@ -134,4 +135,5 @@ def set_primary_cluster(patroni_url: str):
 
     r = requests.patch('%s/config' %
                        (patroni_url), headers=headers, data=json.dumps(data))
+    r.raise_for_status()
     logger.info("set_primary_cluster %s" % r)

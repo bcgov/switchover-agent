@@ -21,7 +21,7 @@ def initiate_passive_standby(logic_context, py_env: str):
     set_in_recovery(False, py_env)
     scale_health_api(config.get('kube_health_namespace'), 
                      config.get('deployment_health_api'), 
-                     s, py_env)
+                     2, py_env)
     return initiate_standby(logic_context,
                             py_env, 'active-passive')
 

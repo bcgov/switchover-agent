@@ -1,0 +1,16 @@
+name: Run test automation
+
+on:
+  push:
+    branches: [dev, get-tests-working-again]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compose and run
+        run: |
+          docker compose build
+          docker compose up -d
+          cd local
+          bin/cycle-through-transitions.sh

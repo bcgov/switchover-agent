@@ -1,23 +1,14 @@
 from fastapi import FastAPI, Response, Request, Body, status
 import os
 import sys
-import traceback
 import json
 import time
-import asyncio
 import logging
-import requests
-import pprint
-import ssl
-import pathlib
 import uvicorn
-from urllib.parse import urlparse
-from urllib.parse import parse_qs
-from multiprocessing import Process, Queue
 from fastapi.responses import StreamingResponse
 from config import config
 from data.phases import phases
-import random
+from mask import mask_utc_timestamps
 
 app = FastAPI()
 
@@ -26,6 +17,7 @@ mocks = {}
 CURR = os.path.dirname(os.path.realpath(__file__))
 
 def get(base: str, path: str):
+  logging.info("Open %s%s" % (base, path))
   f = open("%s%s" % (base, path))
   return json.load(f)
 
@@ -46,10 +38,9 @@ def initiate(request: Request, event: str):
   config["activity"].append({"path":"INITIATE/%s" % event })
   return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-
 @app.get("/activity")
 def state(request: Request):
-  return Response(content=json.dumps(config["activity"], indent=2), media_type="application/json")
+  return Response(content=json.dumps(mask_utc_timestamps(config["activity"]), indent=2), media_type="application/json")
 
 @app.get("/k8s/{rest_of_path:path}")
 async def k8s(request: Request, rest_of_path: str, watch: bool = False):
@@ -91,7 +82,7 @@ async def k8s(request: Request, rest_of_path: str, watch: bool = False):
           time.sleep(2)
 
       if watch:
-        return StreamingResponse(slow_iter(1000, watch, rest_of_path), media_type="application/json")
+        return StreamingResponse(slow_iter(10, watch, rest_of_path), media_type="application/json")
       else:
         return StreamingResponse(slow_iter(1, watch, rest_of_path), media_type="application/json")
       
@@ -124,19 +115,31 @@ async def k8s_patch(request: Request, rest_of_path: str):
     # apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale
     body = await request.json()
     logging.warning("-- %s", json.dumps(body, indent=2))
-    config["activity"].append({"path":rest_of_path, "body": body })
+    config["activity"].append({"path":rest_of_path, "method": "PATCH", "body": body })
     
     if rest_of_path == 'api/v1/namespaces/000000-tools/configmaps/switchover-state-local':
-      if body['data']['transition'] == "" and body['data']['last_stable_state'] == "golddr-primary":
-        config['k8s.configmaps'] = "configmaps-golddr-primary.json"
-      elif body['data']['transition'] == "" and body['data']['last_stable_state'] == "gold-standby":
-        config['k8s.configmaps'] = "configmaps-gold-standby.json"
-      elif body['data']['transition'] == "" and body['data']['last_stable_state'] == "gold-standby-partial":
-        config['k8s.configmaps'] = "configmaps-gold-standby-partial.json"
-      elif body['data']['transition'] == 'golddr-primary' and body['data']['maintenance'] is None:
-        config['k8s.configmaps'] = "configmaps-transition-golddr-primary.json"
-      elif body['data']['transition'] == "":
-        logging.warning("-- DO NOTHING ON MOCK")
+      if body['data']['transition'] == "":
+        # Patching without a transition is when the work to transition has been completed
+        # so here can do any correcting of mock state, such as what the DNS is expected to be
+        if body['data']['last_stable_state'] == "active-passive":
+          config['k8s.configmaps'] = "configmaps-active-passive.json"
+          config['dns'] = "active.json"
+        elif body['data']['last_stable_state'] == "golddr-primary":
+          config['k8s.configmaps'] = "configmaps-golddr-primary.json"
+          config['dns'] = "passive.json"
+        elif body['data']['last_stable_state'] == "gold-standby":
+          config['k8s.configmaps'] = "configmaps-gold-standby.json"
+        elif body['data']['last_stable_state'] == "gold-standby-partial":
+          config['k8s.configmaps'] = "configmaps-gold-standby-partial.json"
+        else:
+          logging.warning("-- DO NOTHING ON MOCK")
+      else:
+        if body['data']['transition'] == 'golddr-primary' and body['data']['maintenance'] is None:
+          config['k8s.configmaps'] = "configmaps-transition-golddr-primary.json"
+        elif body['data']['transition'] == 'gold-standby' and body['data']['maintenance'] is None:
+          config['k8s.configmaps'] = "configmaps-transition-gold-standby.json"
+        elif body['data']['transition'] == 'active-passive':
+          config['k8s.configmaps'] = "configmaps-transition-active-passive.json"
       return Response(status_code=status.HTTP_204_NO_CONTENT)
     elif rest_of_path == 'apis/apps/v1/namespaces/000000-dev/statefulsets/patroni-spilo/scale':
       patroni_config = get(CURR, "/data/patroni/%s" % config['patroni.config'])
@@ -171,16 +174,29 @@ async def delete(request: Request, rest_of_path: str):
     body = None
     #body = await request.json()
     #logging.warning("-- %s", json.dumps(body, indent=2))
-    config["activity"].append({"path":rest_of_path, "body": body })
+    config["activity"].append({"path":rest_of_path, "method": "DELETE", "body": body })
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.patch("/patroni/config")
+async def patroni_patch(request: Request):
+    logging.info("PATCH request /patroni/config")
+
+    body = await request.json()
+    logging.warning("-- %s", json.dumps(body, indent=2))
+    config["activity"].append({"path":"/patroni/config", "method": "PATCH", "body": body })
+
+    if body['standby_cluster'] is None:
+      config['patroni.cluster'] = 'cluster.json'
+    else:
+      config['patroni.cluster'] = 'cluster-standby-3.json'
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 @app.get("/patroni/{rest_of_path:path}")
 def patroni(request: Request, rest_of_path: str):
     logging.info("GET request /patroni/%s",rest_of_path)
 
-    
     if rest_of_path == 'config':
       logging.info("Patroni Config %s", config['patroni.config'])
       f = open("%s/data/patroni/%s" % (CURR, config['patroni.config']))
@@ -198,7 +214,7 @@ def patroni(request: Request, rest_of_path: str):
 def maintenance(request: Request, rest_of_path: str):
     logging.info("PUT request %s %s",rest_of_path, request)
     
-    config["activity"].append({"path":"MAINTENANCE", "body": rest_of_path })
+    config["activity"].append({"path":"MAINTENANCE", "method": "PUT", "body": rest_of_path })
 
     return {}
 
@@ -206,14 +222,14 @@ def maintenance(request: Request, rest_of_path: str):
 def dns(request: Request):
     logging.info("GET request /dns %s", request)
     
-    return Response(content=get(CURR, "/data/dns/%s" % config['dns']))
+    return get(CURR, "/data/dns/%s" % config['dns'])
 
 @app.post("/tekton")
 async def tekton(request: Request):
     logging.info("POST request %s", request)
     
     body = await request.json()
-    config["activity"].append({"path":"TEKTON/TRIGGER", "body": body })
+    config["activity"].append({"path":"TEKTON/TRIGGER", "method": "POST", "body": body })
 
     return { "eventID": "0000-0000-0000"}
   

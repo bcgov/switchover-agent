@@ -101,6 +101,8 @@ class Logic:
                         # Status Reason/Status : Running, Unknown
                         # Status Reason/Status : Succeeded, True
                         # Status Reason/Status : Failed, False
+                    else:
+                        logger.debug("kind  = %s" % kind)
 
                 if item['event'] == 'patroni':
                     self.patroni = item
@@ -417,7 +419,7 @@ class Logic:
         data = dict()
         if last_stable_state is not None:
             data['last_stable_state'] = last_stable_state
-            data['last_stable_state_ts'] = datetime.datetime.now()
+            data['last_stable_state_ts'] = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         if transition is not None:
             data['transition'] = transition
         data['maintenance'] = maintenance
