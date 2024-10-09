@@ -1,7 +1,6 @@
 import logging
-from clients.tekton import trigger_tekton_build
-from clients.kube import scale, restart_deployment
-from transitions.shared import maintenance_on, maintenance_off, set_in_recovery
+from clients.kube import restart_deployment
+from transitions.shared import maintenance_on, maintenance_off, scale_health_api, set_in_recovery
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -14,8 +13,9 @@ def initiate_active_down(py_env: str):
 
     set_in_recovery(True, py_env)
 
-    scale(config.get('kube_health_namespace'), 'deployment',
-          config.get('deployment_health_api'), 0, py_env)
+    scale_health_api(config.get('kube_health_namespace'), 
+                     config.get('deployment_health_api'), 
+                     0, py_env)
 
     maintenance_on()
 
@@ -31,7 +31,8 @@ def rollback_active_down(py_env: str):
 
     maintenance_off(py_env)
 
-    scale(config.get('kube_health_namespace'), 'deployment',
-          config.get('deployment_health_api'), 2, py_env)
+    scale_health_api(config.get('kube_health_namespace'), 
+                     config.get('deployment_health_api'), 
+                     2, py_env)
 
     set_in_recovery(False, py_env)

@@ -47,16 +47,14 @@ And then once the Active site is ready to return to normal operation, the `Switc
 - Scale Keycloak (and its dependencies) up and wait for ready
 - Deactivate Maintenance messaging
 
-## Getting Started
-
-### Dependencies
+## Dependencies
 
 - Docker
 - Kubernetes
 
-### Installation
+## Development
 
-#### Docker
+### Local Installation (Docker)
 
 ```
 docker build --tag switchover.local -f Dockerfile .
@@ -113,22 +111,23 @@ docker run -ti --rm \
 switchover.local
 
 ```
+### Local Installation (Native)
 
 #### Poetry
 
 ```bash
 brew update
 brew install pyenv
-pyenv install 3.7
-pyenv global 3.7
-curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python
+pyenv install 3.9
+pyenv global 3.9
+curl -sSL https://install.python-poetry.org > get-poetry.py | python
 ```
 
 #### Requirements
 
 ```bash
 export PATH="$HOME/.poetry/bin:$PATH"
-poetry env use 3.7
+poetry env use 3.9
 poetry install
 ```
 
@@ -138,26 +137,13 @@ poetry install
 poetry run python src/main.py
 ```
 
-#### Mock Testing
+### Testing
 
-```
-docker compose up
+```sh
+# Generate new TLS certificates if expired
 
-curl -v http://127.0.0.1:6664/phase/transition-to-golddr-primary -X PUT
-curl -v http://127.0.0.1:6664/phase/transition-to-gold-standby -X PUT
-curl -v http://127.0.0.1:6664/phase/transition-to-active-passive -X PUT
+cd local/tls
 
--- Active Mock Activity
-curl -v http://127.0.0.1:6664/activity -X GET
-
--- Passive Mock Activity
-curl -v http://127.0.0.1:6665/activity -X GET
-
-```
-
-#### Testing
-
-```
 openssl genrsa -out switchover-peer.key 2048
 
 export EXT='[ req ]\nprompt = no\ndistinguished_name = dn\nreq_extensions = req_ext\n\n[ dn ]\nCN = switchover\n\n[ req_ext ]\nextendedKeyUsage = serverAuth\nsubjectAltName = @alt_names\n\n[ alt_names ]\nDNS.1 = agent-active.localtest.me\nDNS.3 = agent-passive.localtest.me\n\n'
@@ -175,15 +161,23 @@ openssl x509 -req -in switchover-peer.csr \
  -out switchover-peer.crt -days 500 -sha256
 ```
 
-```
+```sh
 
 docker compose build
 docker compose up
 
+# Manually trigger transitions
 curl -v http://localhost:6664/phase/transition-to-golddr-primary -X PUT
 curl -v http://localhost:6664/phase/transition-to-gold-standby -X PUT
 curl -v http://localhost:6664/phase/transition-to-active-passive -X PUT
 
+# Retrieve Active Mock Activity
+curl -v http://127.0.0.1:6664/activity -X GET
+
+# Retrieve Passive Mock Activity
+curl -v http://127.0.0.1:6665/activity -X GET
+
+# Automatically trigger failover to passive
 curl -v http://localhost:6664/initiate/dns_lookup_error -X PUT
 ```
 
@@ -277,7 +271,7 @@ openssl x509 -req -in switchover-peer.csr \
  -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
  -extensions req_ext \
  -extfile <(printf "$EXT") \
- -out switchover-peer.crt -days 500 -sha256
+ -out switchover-peer.crt -days 1000 -sha256
 
 openssl x509 -in switchover-peer.crt -text -noout
 

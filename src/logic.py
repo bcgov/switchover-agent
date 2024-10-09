@@ -78,7 +78,8 @@ class Logic:
 
                             if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
 
-                                logger.info("End State for Pipeline!")
+                                logger.info("End State for Pipeline - %s" 
+                                            % status_reason)
                                 logger.info("Tekton Start: %s" %
                                             self.pipeline['start_ts'])
                                 logger.info("Tekton   End: %s" %
@@ -86,6 +87,8 @@ class Logic:
                                 # set the maintenance mode appropriately
                                 if self.pipeline['maintenance']:
                                     maintenance_on()
+                                elif status_reason == "Failed" or status_reason == "PipelineRunCancelled":
+                                    logger.error("Pipeline Failed or Cancelled - keeping maintenance on")
                                 else:
                                     maintenance_off(py_env)
                                 self.pipeline = dict(
@@ -98,6 +101,8 @@ class Logic:
                         # Status Reason/Status : Running, Unknown
                         # Status Reason/Status : Succeeded, True
                         # Status Reason/Status : Failed, False
+                    else:
+                        logger.debug("kind  = %s" % kind)
 
                 if item['event'] == 'patroni':
                     self.patroni = item
@@ -375,7 +380,7 @@ class Logic:
                             elif cluster == config.get('passive_site'):
 
                                 initiate_passive_maintenance(self,
-                                                             namespace, patroni_local_url, py_env)
+                                                              patroni_local_url, py_env)
                                 next_state = transition
 
                             self.update_switchover_state(
@@ -414,7 +419,7 @@ class Logic:
         data = dict()
         if last_stable_state is not None:
             data['last_stable_state'] = last_stable_state
-            data['last_stable_state_ts'] = datetime.datetime.now()
+            data['last_stable_state_ts'] = datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         if transition is not None:
             data['transition'] = transition
         data['maintenance'] = maintenance

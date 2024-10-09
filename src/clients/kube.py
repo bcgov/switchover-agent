@@ -8,6 +8,7 @@ import traceback
 import sys
 import time
 import datetime
+from config import config as switchover_config
 
 logger = logging.getLogger(__name__)
 
@@ -264,3 +265,26 @@ def init_apps_client(py_env: str):
     else:
         config.load_kube_config()
     return client.AppsV1Api()
+
+def init_policy_client(py_env: str):
+    if py_env == 'production':
+        config.load_incluster_config()
+    else:
+        config.load_kube_config()
+    return client.PolicyV1Api()
+
+def update_pdb(namespace, name, min_available, py_env):
+    logger.debug(f"[update_pdb] Updating PDB {name} in namespace {namespace} with minAvailable: {min_available}")
+
+    v1 = init_policy_client(py_env)
+    try:
+        body = {
+            "spec": {
+                "minAvailable": min_available
+            }
+        }
+        v1.patch_namespaced_pod_disruption_budget(name, namespace, body)
+        logger.debug(f"PDB {name} updated successfully")
+    except ApiException as e:
+        logger.error(f"Exception when updating PDB: {e}")
+        raise
