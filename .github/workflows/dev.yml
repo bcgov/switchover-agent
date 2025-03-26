@@ -2,7 +2,7 @@ name: Build Switchover Agent
 
 on:
   push:
-    branches: [dev]
+    branches: [dev,hotfix/*]
 
 env:
   REGISTRY: ghcr.io
