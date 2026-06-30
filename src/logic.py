@@ -28,6 +28,7 @@ class Logic:
                     maintenance=False)
     last_switchover_state = None
     retry_state = None
+    transition_failed = False
 
     triggers = []
     PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
@@ -103,6 +104,11 @@ class Logic:
                                     self._on_pipeline_success(py_env)
                                 else:
                                     self._on_pipeline_failure(py_env)
+
+                            elif (status_reason in ("Completed", "Succeeded")
+                                    and params.get('release-namespace') == config.get('solution_namespace')
+                                    and self.transition_failed):
+                                self._on_untracked_env_success(py_env)
 
                         if item['data']['type'] != "ADDED" and item['data']['type'] != "DELETED":
                             if self.retry_state is not None and self.retry_state['event_id'] == event_id:
@@ -432,6 +438,7 @@ class Logic:
         self.pipeline = dict(event_id=None, start_ts=None, maintenance=False)
         release = self._transition_release()
         self.retry_state = None
+        self.transition_failed = False
         self.GAUGE.labels(resource="transition").set(0)
         self.TRANSITION_GAUGE.labels(release=release).set(0)
 
@@ -464,6 +471,16 @@ class Logic:
         self.TRANSITION_FAILED.labels(release=release).inc()
         self.pipeline = dict(event_id=None, start_ts=None, maintenance=False)
         self.retry_state = None
+        self.transition_failed = True
+
+    def _on_untracked_env_success(self, py_env: str):
+        release = config.get('solution_namespace') or 'unknown'
+        logger.warning(
+            "Untracked pipeline succeeded for env %s — clearing stuck maintenance", release)
+        maintenance_off(py_env)
+        self.transition_failed = False
+        self.GAUGE.labels(resource="transition").set(0)
+        self.TRANSITION_GAUGE.labels(release=release).set(0)
 
     def _maybe_retry(self):
         rs = self.retry_state
