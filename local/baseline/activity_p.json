@@ -86,7 +86,9 @@
           "username": "switchover_agent"
         }
       }
-    }
+    },
+    "trigger_num": 1,
+    "pipelineruns_fixture": "pipelineruns-completed.json"
   },
   {
     "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
@@ -311,7 +313,9 @@
           "username": "switchover_agent"
         }
       }
-    }
+    },
+    "trigger_num": 2,
+    "pipelineruns_fixture": "pipelineruns-completed.json"
   },
   {
     "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
@@ -324,5 +328,38 @@
         "maintenance": null
       }
     }
+  },
+  {
+    "path": "apis/apps/v1/namespaces/000000-dev/deployments/keycloak-maintenance-redirect-generic-api",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2020-01-01T00:00:00"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "path": "api/v1/namespaces/000000-dev/services/keycloak-http",
+    "method": "PATCH",
+    "body": {
+      "spec": {
+        "selector": {
+          "app": "keycloak-maintenance-page",
+          "app.kubernetes.io/instance": null,
+          "app.kubernetes.io/name": null
+        }
+      }
+    }
+  },
+  {
+    "path": "MAINTENANCE",
+    "method": "PUT",
+    "body": "maintenance/true"
   }
 ]

@@ -255,7 +255,9 @@
           "username": "switchover_agent"
         }
       }
-    }
+    },
+    "trigger_num": 1,
+    "pipelineruns_fixture": "pipelineruns-completed.json"
   },
   {
     "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",
@@ -418,7 +420,9 @@
           "username": "switchover_agent"
         }
       }
-    }
+    },
+    "trigger_num": 2,
+    "pipelineruns_fixture": "pipelineruns-completed.json"
   },
   {
     "path": "api/v1/namespaces/000000-tools/configmaps/switchover-state-local",

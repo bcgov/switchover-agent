@@ -224,16 +224,55 @@ def dns(request: Request):
     
     return get(CURR, "/data/dns/%s" % config['dns'])
 
+@app.put("/tekton/mode/{mode:str}")
+async def tekton_mode(request: Request, mode: str, fail_count: int = 1):
+    """Switch pipeline failure simulation mode.
+
+    mode values:
+      normal           — every trigger returns completed (default)
+      fail-then-succeed — first fail_count triggers fail, then succeed
+      always-fail       — every trigger fails (exercises exhaustion / failed transition)
+    """
+    if mode == "normal":
+        config["pipeline_fail_mode"] = None
+    elif mode in ("fail-then-succeed", "always-fail"):
+        config["pipeline_fail_mode"] = mode
+        config["pipeline_fail_count"] = fail_count
+    else:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
+    config["pipeline_trigger_count"] = 0
+    config["k8s.pipelineruns"] = "pipelineruns.json"
+    logging.warning("TEKTON MODE set to %s (fail_count=%d)", mode, fail_count)
+    config["activity"].append({"path": "TEKTON/MODE", "method": "PUT", "body": {"mode": mode, "fail_count": fail_count}})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.post("/tekton")
 async def tekton(request: Request):
     logging.info("POST request %s", request)
-    
+
     body = await request.json()
-    config["activity"].append({"path":"TEKTON/TRIGGER", "method": "POST", "body": body })
+    config["pipeline_trigger_count"] += 1
+    trigger_num = config["pipeline_trigger_count"]
+    fail_mode = config.get("pipeline_fail_mode")
 
-    config['k8s.pipelineruns'] = 'pipelineruns-completed.json'
+    if fail_mode == "always-fail":
+        config['k8s.pipelineruns'] = 'pipelineruns-failed.json'
+    elif fail_mode == "fail-then-succeed" and trigger_num <= config.get("pipeline_fail_count", 1):
+        config['k8s.pipelineruns'] = 'pipelineruns-failed.json'
+    else:
+        config['k8s.pipelineruns'] = 'pipelineruns-completed.json'
 
-    return { "eventID": "0000-0000-0000"}
+    config["activity"].append({
+        "path": "TEKTON/TRIGGER",
+        "method": "POST",
+        "body": body,
+        "trigger_num": trigger_num,
+        "pipelineruns_fixture": config['k8s.pipelineruns'],
+    })
+
+    return {"eventID": "0000-0000-0000"}
   
 
 # Not addressed yet

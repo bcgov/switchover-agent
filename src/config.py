@@ -1,5 +1,13 @@
 import os
 
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ[name])
+    except (KeyError, ValueError):
+        return default
+
+
 config = dict(
     wss_server_host='0.0.0.0',
     wss_server_port=8765,
@@ -40,4 +48,7 @@ config = dict(
     patroni_peer_port=os.environ.get("PATRONI_PEER_PORT"),
     kube_health_namespace=os.environ.get("KUBE_HEALTH_NAMESPACE"),
     maintenance_url=os.environ.get("MAINTENANCE_URL"),
+    pipeline_retry_interval_seconds=_int_env("PIPELINE_RETRY_INTERVAL_SECONDS", 300),
+    pipeline_max_retries=_int_env("PIPELINE_MAX_RETRIES", 2),
+    pipeline_retry_total_cap_seconds=_int_env("PIPELINE_RETRY_TOTAL_CAP_SECONDS", 900),
 )

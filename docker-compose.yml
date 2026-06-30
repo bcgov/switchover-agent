@@ -13,7 +13,7 @@ x-common-variables:
   KUBE_HEALTH_NAMESPACE: 000000-tools
   KUBE_TEKTON_NAMESPACE: 000000-tools
   #PROCESS_LIST: logic_handler,dns_watch
-  PROCESS_LIST: logic_handler,kube_watch,dns_watch,patroni_worker,tekton_watch,peer_server,peer_client,peer_client_fwd
+  PROCESS_LIST: logic_handler,kube_watch,dns_watch,patroni_worker,tekton_watch,peer_server,peer_client,peer_client_fwd,tick_producer
   ENVIRONMENT: local
   GSLB_DOMAIN: mock.localtest.me
   #PATRONI_LOCAL_API: http://mock.localtest.me:8000/patroni
@@ -27,6 +27,9 @@ x-common-variables:
   TERRAFORM_TFVARS: terraform-pipeline-local-tfvars
   # DNS_SERVICE_URL: http://mock-active.localtest.me:8000/dns
   KEYCLOAK_SELECTOR: app.kubernetes.io/name=keycloak
+  PIPELINE_RETRY_INTERVAL_SECONDS: "30"
+  PIPELINE_MAX_RETRIES: "2"
+  PIPELINE_RETRY_TOTAL_CAP_SECONDS: "120"
 
 services:
   switchover-agent-active:

@@ -25,6 +25,7 @@ from clients.kube import kube_watch, restart_deployment, get_configmap
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.keycloak import keycloak_service_block, keycloak_service_flow
 from clients.prom import prom_server
+from clients.tick import tick_producer
 from clients.patroni import patroni_worker, set_readonly_cluster, set_primary_cluster, set_standby_cluster
 from transitions.initiate_down import rollback_active_down
 from transitions.shared import maintenance_off, maintenance_on
@@ -261,6 +262,10 @@ if __name__ == '__main__':
             os.environ.get("PATRONI_LOCAL_API"),
             logic_q
         ))
+        processes.append(t)
+
+    if is_enabled('tick_producer'):
+        t = Process(target=tick_producer, args=(logic_q,))
         processes.append(t)
 
     try:
