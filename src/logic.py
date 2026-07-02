@@ -91,7 +91,7 @@ class Logic:
                                 logger.debug("   messag = %s" %
                                              spec['status']['conditions'][0]['message'])
 
-                            if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
+                            if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "Cancelled" or status_reason == "PipelineRunCancelled"):
 
                                 logger.info("End State for Pipeline - %s" 
                                             % status_reason)
