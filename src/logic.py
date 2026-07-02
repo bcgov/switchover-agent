@@ -3,6 +3,7 @@ import datetime
 import traceback
 import sys
 import time
+from typing import Any
 from clients.tekton import trigger_tekton_build
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.kube import get_configmap, update_configmap, restart_deployment, patch_secret
@@ -29,6 +30,7 @@ class Logic:
     last_switchover_state = None
     retry_state = None
     transition_failed = False
+    failed_transition_maintenance = None
 
     triggers = []
     PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
@@ -443,6 +445,7 @@ class Logic:
         release = self._transition_release()
         self.retry_state = None
         self.transition_failed = False
+        self.failed_transition_maintenance = None
         self.GAUGE.labels(resource="transition").set(0)
         self.TRANSITION_GAUGE.labels(release=release).set(0)
 
@@ -473,6 +476,8 @@ class Logic:
 
     def _declare_transition_failed(self):
         release = self._transition_release()
+        rs = self.retry_state
+        self.failed_transition_maintenance = rs['maintenance'] if rs else False
         logger.error("Transition FAILED for release %s — maintenance mode remains on", release)
         self.GAUGE.labels(resource="transition").set(3)
         self.TRANSITION_GAUGE.labels(release=release).set(3)
@@ -484,9 +489,13 @@ class Logic:
     def _on_untracked_env_success(self, py_env: str):
         release = config.get('solution_namespace') or 'unknown'
         logger.warning(
-            "Untracked pipeline succeeded for env %s — clearing stuck maintenance", release)
-        maintenance_off(py_env)
+            "Untracked pipeline succeeded for env %s — applying post-success maintenance", release)
+        if self.failed_transition_maintenance:
+            maintenance_on()
+        else:
+            maintenance_off(py_env)
         self.transition_failed = False
+        self.failed_transition_maintenance = None
         self.GAUGE.labels(resource="transition").set(0)
         self.TRANSITION_GAUGE.labels(release=release).set(0)
 
@@ -559,7 +568,7 @@ class Logic:
         self.triggers.clear()
 
     def set_pipeline(self, pipeline: dict):
-        self.pipeline = dict(
+        self.pipeline = dict[str, Any | None](
             event_id=pipeline['event_id'],
             start_ts=pipeline['start_ts'],
             maintenance=pipeline['maintenance'],

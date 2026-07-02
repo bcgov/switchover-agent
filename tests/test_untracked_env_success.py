@@ -7,9 +7,9 @@ RELEASE = "test-ns"
 WRONG_RELEASE = "other-ns"
 
 
-def _declare_failed(logic, clock, event_id="evt-001"):
+def _declare_failed(logic, clock, event_id="evt-001", maintenance=False):
     """Drive logic to a stuck failed-transition state."""
-    logic.set_pipeline(dict(event_id=event_id, start_ts=clock(), maintenance=False))
+    logic.set_pipeline(dict(event_id=event_id, start_ts=clock(), maintenance=maintenance))
     logic._declare_transition_failed()
 
 
@@ -24,6 +24,11 @@ class TestTransitionFailedFlag:
     def test_set_on_declare(self, logic, clock):
         _declare_failed(logic, clock)
         assert logic.transition_failed is True
+        assert logic.failed_transition_maintenance is False
+
+    def test_preserves_standby_maintenance_intent_on_declare(self, logic, clock):
+        _declare_failed(logic, clock, maintenance=True)
+        assert logic.failed_transition_maintenance is True
 
     def test_cleared_on_tracked_success(self, logic, clock):
         _declare_failed(logic, clock)
@@ -44,11 +49,19 @@ class TestTransitionFailedFlag:
 # ---------------------------------------------------------------------------
 
 class TestUntrackedEnvSuccessHelper:
-    def test_calls_maintenance_off(self, logic, clock):
-        _declare_failed(logic, clock)
-        with patch("logic.maintenance_off") as mock_off:
+    def test_calls_maintenance_off_for_primary_path_failure(self, logic, clock):
+        _declare_failed(logic, clock, maintenance=False)
+        with patch("logic.maintenance_off") as mock_off, patch("logic.maintenance_on") as mock_on:
             logic._on_untracked_env_success("test")
         mock_off.assert_called_once()
+        mock_on.assert_not_called()
+
+    def test_calls_maintenance_on_for_standby_path_failure(self, logic, clock):
+        _declare_failed(logic, clock, maintenance=True)
+        with patch("logic.maintenance_off") as mock_off, patch("logic.maintenance_on") as mock_on:
+            logic._on_untracked_env_success("test")
+        mock_on.assert_called_once()
+        mock_off.assert_not_called()
 
     def test_resets_legacy_transition_gauge(self, logic, clock):
         _declare_failed(logic, clock)
