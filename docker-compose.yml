@@ -28,6 +28,7 @@ x-common-variables:
   # DNS_SERVICE_URL: http://mock-active.localtest.me:8000/dns
   KEYCLOAK_SELECTOR: app.kubernetes.io/name=keycloak
   PIPELINE_RETRY_INTERVAL_SECONDS: "30"
+  PIPELINE_ATTEMPT_TIMEOUT_SECONDS: "360"
   PIPELINE_MAX_RETRIES: "2"
   PIPELINE_RETRY_TOTAL_CAP_SECONDS: "120"
 

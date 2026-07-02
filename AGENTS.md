@@ -12,16 +12,16 @@ Switchover Agent: a Python service that, alongside an F5 GSLB, manages failover 
 - Every watcher/worker pushes events onto a single **`logic_q` queue**. `Logic.handler` in `src/logic.py` is the single consumer and the brain: it reacts to `kube_stream` (configmap + tekton PipelineRun), `patroni`, `dns`, `peer`, and `switchover_state` events and drives transitions.
 - Transitions live in `src/transitions/` (`initiate_*`, `shared.py`, `wait_for.py`). External I/O is isolated in `src/clients/` (`kube`, `kube_stream`, `tekton`, `patroni`, `dns`, `maintenance`, `keycloak`, `prom`).
 - Config is **env-var driven**, centralized in `src/config.py`. Don't read `os.environ` ad hoc in new code; add to `config.py`.
-- Pipeline retry behaviour is configurable via `PIPELINE_RETRY_INTERVAL_SECONDS` (default 300), `PIPELINE_MAX_RETRIES` (default 2), and `PIPELINE_RETRY_TOTAL_CAP_SECONDS` (default 900). Failed pipelines are automatically retried up to the configured count; after the cap, no new attempts start but any in-flight run finishes. A failed transition (all retries exhausted) keeps maintenance on and emits a dedicated metric.
+- Pipeline retry behaviour is configurable via `PIPELINE_RETRY_INTERVAL_SECONDS` (default 30, post-failure backoff), `PIPELINE_ATTEMPT_TIMEOUT_SECONDS` (default 360, per-attempt hang timeout), `PIPELINE_MAX_RETRIES` (default 2), and `PIPELINE_RETRY_TOTAL_CAP_SECONDS` (default 900). Failed or timed-out pipelines are automatically retried up to the configured count; after the cap, no new attempts start but any in-flight run finishes. A failed transition (all retries exhausted) keeps maintenance on and emits a dedicated metric.
 
 ### Pipeline / Tekton tracking and retry
 
-- A transition triggers a Tekton build (`trigger_tekton_build`) and records the in-flight run via `Logic.set_pipeline()`, which sets both `Logic.pipeline = {event_id, start_ts, maintenance}` and `Logic.retry_state = {event_id, transition_started_ts, attempts_made, retry_at, maintenance, release}`.
+- A transition triggers a Tekton build (`trigger_tekton_build`) and records the in-flight run via `Logic.set_pipeline()`, which sets both `Logic.pipeline = {event_id, start_ts, maintenance, name, cancelling}` and `Logic.retry_state = {event_id, transition_started_ts, attempts_made, retry_at, maintenance, release}`.
 - `tekton_watch` feeds `PipelineRun` events into the inline PipelineRun branch of `Logic.handler()`, which matches on `triggers.tekton.dev/triggers-eventid`.
 - On a tracked terminal state:
   - **Success** (`Completed`/`Succeeded`): normal maintenance handling, clear pipeline/retry state.
-  - **Failure** (`Failed`/`PipelineRunCancelled`): schedule a retry (`retry_at = now + interval`) if attempts remain and the cap (from first attempt start) has not elapsed; otherwise call `_declare_transition_failed()`.
-- Retries are driven by `tick` events (30s heartbeat from `clients/tick.py`). `_maybe_retry()` fires `retry_deploy()` when `retry_at` is due; re-triggers Tekton only (no full transition side-effects).
+  - **Failure** (`Failed`/`Cancelled`/`PipelineRunCancelled`): schedule a fast retry (`retry_at = now + interval`) if attempts remain and the cap (from first attempt start) has not elapsed; otherwise call `_declare_transition_failed()`.
+- Retries are driven by `tick` events (30s heartbeat from `clients/tick.py`). `_maybe_retry()` cancels hung runs past `PIPELINE_ATTEMPT_TIMEOUT_SECONDS` (patch `CancelledRunFinally`), then fires `retry_deploy()` when `retry_at` is due; re-triggers Tekton only (no full transition side-effects).
 - Cap behaviour: stop starting new attempts after `PIPELINE_RETRY_TOTAL_CAP_SECONDS`; any in-flight run may finish. Declare failed when retries exhausted or cap elapsed with no success/in-flight attempt.
 - `release` on retry/failed metrics comes from Tekton param `release-namespace` (updated on PipelineRun events), seeded from `config.solution_namespace` (`KUBE_NAMESPACE`) at first trigger.
 
@@ -29,7 +29,7 @@ Switchover Agent: a Python service that, alongside an F5 GSLB, manages failover 
 
 | Metric | Labels | Notes |
 | --- | --- | --- |
-| `switchover_pipeline` | `release`, `state` | Incremented for MODIFIED events matching `retry_state.event_id` (excludes untracked runs; may count duplicate watch events; terminal success often not counted) |
+| `switchover_pipeline` | `release`, `state` | Incremented for MODIFIED events matching `retry_state.event_id` (excludes untracked runs; may count duplicate watch events; terminal success often not counted). `state="Timeout"` on agent-initiated hang cancel. |
 | `switchover_transition_failed` | `release` | Counter; incremented **once** per failed transition — use for alerting |
 | `switchover_transition` | `release` | Gauge; `3` = failed, `0` = success/cleared — per-release status |
 | `switchover_logic_gauge` | `resource` | Legacy aggregate; `transition` = `0` idle, `1` in progress, `3` failed (no `release` label) |

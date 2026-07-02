@@ -164,6 +164,10 @@ async def k8s_patch(request: Request, rest_of_path: str):
         config['patroni.config'] = 'config-standby.json'
       else:
         config['patroni.config'] = 'config.json'
+
+    elif 'pipelineruns/' in rest_of_path and body.get('spec', {}).get('status') == 'CancelledRunFinally':
+      config['k8s.pipelineruns'] = 'pipelineruns-cancelled.json'
+      logging.warning("PipelineRun cancel acknowledged — serving cancelled fixture")
         
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -232,10 +236,11 @@ async def tekton_mode(request: Request, mode: str, fail_count: int = 1):
       normal           — every trigger returns completed (default)
       fail-then-succeed — first fail_count triggers fail, then succeed
       always-fail       — every trigger fails (exercises exhaustion / failed transition)
+      hang             — pipeline stays Running until agent cancels it
     """
     if mode == "normal":
         config["pipeline_fail_mode"] = None
-    elif mode in ("fail-then-succeed", "always-fail"):
+    elif mode in ("fail-then-succeed", "always-fail", "hang"):
         config["pipeline_fail_mode"] = mode
         config["pipeline_fail_count"] = fail_count
     else:
@@ -259,6 +264,8 @@ async def tekton(request: Request):
 
     if fail_mode == "always-fail":
         config['k8s.pipelineruns'] = 'pipelineruns-failed.json'
+    elif fail_mode == "hang":
+        config['k8s.pipelineruns'] = 'pipelineruns-running.json'
     elif fail_mode == "fail-then-succeed" and trigger_num <= config.get("pipeline_fail_count", 1):
         config['k8s.pipelineruns'] = 'pipelineruns-failed.json'
     else:
