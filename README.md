@@ -218,6 +218,10 @@ At this point, active is in `golddr-primary` and passive is in `active-passive`.
 | DNS_SERVICE_URL          | Only used for local testing to replace the socket DNS call            |
 | LOG_LEVEL                | Comma-delimited list of categories and their log levels               |
 |                          | Example: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'       |
+| PIPELINE_RETRY_INTERVAL_SECONDS | Seconds to wait after a terminal failure before re-triggering (default: 30) |
+| PIPELINE_ATTEMPT_TIMEOUT_SECONDS | Max seconds a single attempt may run before the agent cancels it (default: 360) |
+| PIPELINE_MAX_RETRIES     | Maximum number of retry attempts after initial failure (default: 2)   |
+| PIPELINE_RETRY_TOTAL_CAP_SECONDS | Total seconds from first attempt before no new retries start (default: 900) |
 
 **PROCESS_LIST values:**
 
@@ -231,6 +235,7 @@ At this point, active is in `golddr-primary` and passive is in `active-passive`.
 | peer_server     | Observes events from the Peer Switchover Agent                  |
 | peer_client     | Establishes a Websocket connection to the Peer Switchover Agent |
 | peer_client_fwd | Forwards specific events to the Peer Switchover Agent           |
+| tick_producer   | Enqueues a heartbeat every 30s to drive retry evaluation        |
 
 **Default ports:**
 
@@ -463,7 +468,7 @@ env:
   LOG_LEVEL:
     value: 'clients.dns=INFO,peers.server=INFO,peers.client=INFO'
   PROCESS_LIST:
-    value: 'logic_handler,dns_watch,kube_watch,tekton_watch,peer_server,peer_client,peer_client_fwd,patroni_worker'
+    value: 'logic_handler,dns_watch,kube_watch,tekton_watch,peer_server,peer_client,peer_client_fwd,patroni_worker,tick_producer'
 EOT
   ]
 }

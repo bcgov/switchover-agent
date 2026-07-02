@@ -3,6 +3,7 @@ import datetime
 import traceback
 import sys
 import time
+from typing import Any
 from clients.tekton import trigger_tekton_build
 from clients.kube import scale, scale_and_wait, delete_pvc, delete_configmap
 from clients.kube import get_configmap, update_configmap, restart_deployment, patch_secret
@@ -25,8 +26,11 @@ class Logic:
     peer = "unknown"
     patroni = dict(control='unknown', concerns=[], leader=dict(role='unknown'))
     pipeline = dict(event_id=None, start_ts=None,
-                    maintenance=False)
+                    maintenance=False, name=None, cancelling=False)
     last_switchover_state = None
+    retry_state = None
+    transition_failed = False
+    failed_transition_maintenance = None
 
     triggers = []
     PIPELINE = Counter('switchover_pipeline', 'Switchover Tekton Pipelines',
@@ -35,6 +39,12 @@ class Logic:
                      ['resource', 'state'])
     GAUGE = Gauge('switchover_logic_gauge', 'Switchover Logic Point in Time',
                   ['resource'])
+    TRANSITION_FAILED = Counter('switchover_transition_failed',
+                                'Switchover transitions declared failed',
+                                ['release'])
+    TRANSITION_GAUGE = Gauge('switchover_transition',
+                             'Switchover transition state per release',
+                             ['release'])
 
     def handler(self, cluster: str, namespace: str, label_selector: str, patroni_local_url: str, py_env: str, _q, fwd_to_peer_q):
         while True:
@@ -42,6 +52,10 @@ class Logic:
                 item = _q.get()
                 logger.info(f'logic {item["event"]}')
                 self.METRIC.labels(resource="logic", state="info").inc()
+
+                if item['event'] == 'tick':
+                    self._maybe_retry()
+                    continue
 
                 if item['event'] == 'kube_stream':
                     spec = item['data']['object']
@@ -55,6 +69,9 @@ class Logic:
                         params = self.pick_params(spec['spec']['params'], [
                             "git-release-branch", "release-namespace"])
 
+                        if self.retry_state is not None and 'release-namespace' in params:
+                            self.retry_state['release'] = params['release-namespace']
+
                         if item['data']['type'] != "ADDED":
                             logger.debug("   (track %s)" %
                                          self.pipeline['event_id'])
@@ -64,6 +81,10 @@ class Logic:
                             for key in params.keys():
                                 logger.debug("   param  %-20s = %s" %
                                              (key, params[key]))
+
+                            if (self.pipeline['event_id'] == event_id
+                                    and self.pipeline.get('name') is None):
+                                self.pipeline['name'] = mdnm
 
                         status_reason = "Undefined"
                         if 'status' in spec and 'conditions' in spec['status']:
@@ -76,27 +97,29 @@ class Logic:
                                 logger.debug("   messag = %s" %
                                              spec['status']['conditions'][0]['message'])
 
-                            if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "PipelineRunCancelled"):
+                            if self.pipeline['event_id'] == event_id and (status_reason == "Completed" or status_reason == "Succeeded" or status_reason == "Failed" or status_reason == "Cancelled" or status_reason == "PipelineRunCancelled"):
 
                                 logger.info("End State for Pipeline - %s" 
                                             % status_reason)
                                 logger.info("Tekton Start: %s" %
                                             self.pipeline['start_ts'])
                                 logger.info("Tekton   End: %s" %
-                                            datetime.datetime.now())
-                                # set the maintenance mode appropriately
-                                if self.pipeline['maintenance']:
-                                    maintenance_on()
-                                elif status_reason == "Failed" or status_reason == "PipelineRunCancelled":
-                                    logger.error("Pipeline Failed or Cancelled - keeping maintenance on")
+                                            self._now())
+
+                                if status_reason in ("Completed", "Succeeded"):
+                                    self._on_pipeline_success(py_env)
                                 else:
-                                    maintenance_off(py_env)
-                                self.pipeline = dict(
-                                    event_id=None, start_ts=None, maintenance=False)
+                                    self._on_pipeline_failure(py_env)
+
+                            elif (status_reason in ("Completed", "Succeeded")
+                                    and params.get('release-namespace') == config.get('solution_namespace')
+                                    and self.transition_failed):
+                                self._on_untracked_env_success(py_env)
 
                         if item['data']['type'] != "ADDED" and item['data']['type'] != "DELETED":
-                            self.PIPELINE.labels(
-                                release=params['release-namespace'], state=status_reason).inc()
+                            if self.retry_state is not None and self.retry_state['event_id'] == event_id:
+                                self.PIPELINE.labels(
+                                    release=params['release-namespace'], state=status_reason).inc()
 
                         # Status Reason/Status : Running, Unknown
                         # Status Reason/Status : Succeeded, True
@@ -199,11 +222,11 @@ class Logic:
                         
                         # Only provide a positive confirmation if there is no transition and matches the required_state
                         # requested by the Peer
-                        if last_switchover_state is not None and last_switchover_state['transition'] == '' and last_switchover_state['last_stable_state'] == item['message']['required_state']:
+                        if self.last_switchover_state is not None and self.last_switchover_state['transition'] == '' and self.last_switchover_state['last_stable_state'] == item['message']['required_state']:
                           fwd_to_peer_q.put({"event": "from_peer", "message": {
                                 "event": "yes_happy_to_proceed", "item": item['message']['item']}})
                         else:
-                          logger.warn("From peer - confirmation FAILED - not in %s (%s)", item['message']['required_state'], last_switchover_state)
+                          logger.warn("From peer - confirmation FAILED - not in %s (%s)", item['message']['required_state'], self.last_switchover_state)
 
                     if item['message']['event'] == 'yes_happy_to_proceed':
                         logger.debug(
@@ -212,7 +235,7 @@ class Logic:
                         item['peer_ok'] = True
 
                 if item['event'] == 'switchover_state':
-                    last_switchover_state = item['data']
+                    self.last_switchover_state = item['data']
                     transition = item['data']['transition']
                     self.METRIC.labels(
                         resource="switchover_state", state=transition).inc()
@@ -407,11 +430,159 @@ class Logic:
                 traceback.print_exc(file=sys.stdout)
                 self.METRIC.labels(resource="logic", state="error").inc()
 
+    def _now(self):
+        fn = getattr(self, '_now_fn', None)
+        if fn is not None:
+            return fn()
+        return datetime.datetime.now()
+
+    def _on_pipeline_success(self, py_env: str):
+        if self.pipeline['maintenance']:
+            maintenance_on()
+        else:
+            maintenance_off(py_env)
+        self.pipeline = self._empty_pipeline()
+        release = self._transition_release()
+        self.retry_state = None
+        self.transition_failed = False
+        self.failed_transition_maintenance = None
+        self.GAUGE.labels(resource="transition").set(0)
+        self.TRANSITION_GAUGE.labels(release=release).set(0)
+
+    def _empty_pipeline(self, maintenance=False):
+        return dict(event_id=None, start_ts=None, maintenance=maintenance,
+                    name=None, cancelling=False)
+
+    def _on_pipeline_failure(self, py_env: str):
+        now = self._now()
+        rs = self.retry_state
+
+        cap_seconds = config.get('pipeline_retry_total_cap_seconds')
+        max_retries = config.get('pipeline_max_retries')
+        interval_seconds = config.get('pipeline_retry_interval_seconds')
+
+        cap_elapsed = rs is not None and (now - rs['transition_started_ts']).total_seconds() >= cap_seconds
+        retries_exhausted = rs is None or rs['attempts_made'] >= max_retries
+
+        if not cap_elapsed and not retries_exhausted:
+            retry_at = now + datetime.timedelta(seconds=interval_seconds)
+            logger.warning("Pipeline failed — scheduling retry %d/%d at %s",
+                           rs['attempts_made'] + 1, max_retries, retry_at)
+            rs['retry_at'] = retry_at
+            self.pipeline = self._empty_pipeline(maintenance=rs['maintenance'])
+        else:
+            logger.error("Pipeline failed — all retries exhausted or cap reached; declaring transition failed")
+            self._declare_transition_failed()
+
+    def _declare_transition_failed(self):
+        release = self._transition_release()
+        rs = self.retry_state
+        self.failed_transition_maintenance = rs['maintenance'] if rs else False
+        logger.error("Transition FAILED for release %s — maintenance mode remains on", release)
+        self.GAUGE.labels(resource="transition").set(3)
+        self.TRANSITION_GAUGE.labels(release=release).set(3)
+        self.TRANSITION_FAILED.labels(release=release).inc()
+        self.pipeline = self._empty_pipeline()
+        self.retry_state = None
+        self.transition_failed = True
+
+    def _on_untracked_env_success(self, py_env: str):
+        release = config.get('solution_namespace') or 'unknown'
+        logger.warning(
+            "Untracked pipeline succeeded for env %s — applying post-success maintenance", release)
+        if self.failed_transition_maintenance:
+            maintenance_on()
+        else:
+            maintenance_off(py_env)
+        self.transition_failed = False
+        self.failed_transition_maintenance = None
+        self.GAUGE.labels(resource="transition").set(0)
+        self.TRANSITION_GAUGE.labels(release=release).set(0)
+
+    def _maybe_retry(self):
+        now = self._now()
+        rs = self.retry_state
+
+        if (self.pipeline['event_id'] is not None
+                and not self.pipeline.get('cancelling')
+                and self.pipeline.get('start_ts') is not None):
+            attempt_timeout = config.get('pipeline_attempt_timeout_seconds')
+            elapsed = (now - self.pipeline['start_ts']).total_seconds()
+            if elapsed >= attempt_timeout:
+                if self.pipeline.get('name'):
+                    self._cancel_timed_out_pipeline()
+                else:
+                    logger.warning(
+                        "Pipeline attempt exceeded timeout but run name not yet known — deferring cancel")
+                return
+
+        if self.pipeline.get('cancelling'):
+            return
+
+        if rs is None or rs.get('retry_at') is None:
+            return
+        if self.pipeline['event_id'] is not None:
+            return
+
+        cap_seconds = config.get('pipeline_retry_total_cap_seconds')
+        cap_elapsed = (now - rs['transition_started_ts']).total_seconds() >= cap_seconds
+
+        if cap_elapsed:
+            logger.error("Retry cap elapsed with no in-flight attempt — declaring transition failed")
+            self._declare_transition_failed()
+            return
+
+        if now >= rs['retry_at']:
+            self._fire_retry(rs)
+
+    def _cancel_timed_out_pipeline(self):
+        from clients.tekton import cancel_pipeline_run
+        name = self.pipeline['name']
+        release = self._transition_release()
+        logger.warning("Pipeline attempt timed out after %ss — cancelling %s",
+                       config.get('pipeline_attempt_timeout_seconds'), name)
+        self.PIPELINE.labels(release=release, state="Timeout").inc()
+        cancel_pipeline_run(name, config.get('py_env'))
+        self.pipeline['cancelling'] = True
+
+    def _fire_retry(self, rs: dict):
+        from transitions.retry import retry_deploy
+        rs['attempts_made'] += 1
+        rs['retry_at'] = None
+        logger.warning("Firing retry attempt %d for release %s", rs['attempts_made'], rs['release'])
+        self.PIPELINE.labels(release=rs['release'], state="Retry").inc()
+        new_event_id = retry_deploy()
+        rs['event_id'] = new_event_id
+        self.pipeline = dict(event_id=new_event_id,
+                             start_ts=self._now(),
+                             maintenance=rs['maintenance'],
+                             name=None,
+                             cancelling=False)
+
+    def _transition_release(self):
+        if self.retry_state and self.retry_state.get('release'):
+            return self.retry_state['release']
+        return config.get('solution_namespace') or 'unknown'
+
     def clear_triggers(self):
         self.triggers.clear()
 
     def set_pipeline(self, pipeline: dict):
-        self.pipeline = pipeline
+        self.pipeline = dict[str, Any | None](
+            event_id=pipeline['event_id'],
+            start_ts=pipeline['start_ts'],
+            maintenance=pipeline['maintenance'],
+            name=pipeline.get('name'),
+            cancelling=False,
+        )
+        self.retry_state = dict(
+            event_id=pipeline['event_id'],
+            transition_started_ts=pipeline['start_ts'],
+            attempts_made=0,
+            retry_at=None,
+            maintenance=pipeline['maintenance'],
+            release=pipeline.get('release') or config.get('solution_namespace'),
+        )
 
     def update_switchover_state(self, last_stable_state: str, transition: str, maintenance: str, py_env: str):
         name = config['switchover_state_configmap']
