@@ -1,7 +1,4 @@
 import time
-import logging
-
-logger = logging.getLogger(__name__)
 
 TICK_INTERVAL_SECONDS = 30
 
@@ -12,5 +9,4 @@ def tick_producer(logic_q):
     events from other watchers."""
     while True:
         time.sleep(TICK_INTERVAL_SECONDS)
-        logger.debug("tick")
         logic_q.put({"event": "tick"})

@@ -25,7 +25,7 @@ class Logic:
     peer = "unknown"
     patroni = dict(control='unknown', concerns=[], leader=dict(role='unknown'))
     pipeline = dict(event_id=None, start_ts=None,
-                    maintenance=False)
+                    maintenance=False, name=None, cancelling=False)
     last_switchover_state = None
     retry_state = None
     transition_failed = False
@@ -79,6 +79,10 @@ class Logic:
                             for key in params.keys():
                                 logger.debug("   param  %-20s = %s" %
                                              (key, params[key]))
+
+                            if (self.pipeline['event_id'] == event_id
+                                    and self.pipeline.get('name') is None):
+                                self.pipeline['name'] = mdnm
 
                         status_reason = "Undefined"
                         if 'status' in spec and 'conditions' in spec['status']:
@@ -435,12 +439,16 @@ class Logic:
             maintenance_on()
         else:
             maintenance_off(py_env)
-        self.pipeline = dict(event_id=None, start_ts=None, maintenance=False)
+        self.pipeline = self._empty_pipeline()
         release = self._transition_release()
         self.retry_state = None
         self.transition_failed = False
         self.GAUGE.labels(resource="transition").set(0)
         self.TRANSITION_GAUGE.labels(release=release).set(0)
+
+    def _empty_pipeline(self, maintenance=False):
+        return dict(event_id=None, start_ts=None, maintenance=maintenance,
+                    name=None, cancelling=False)
 
     def _on_pipeline_failure(self, py_env: str):
         now = self._now()
@@ -458,7 +466,7 @@ class Logic:
             logger.warning("Pipeline failed — scheduling retry %d/%d at %s",
                            rs['attempts_made'] + 1, max_retries, retry_at)
             rs['retry_at'] = retry_at
-            self.pipeline = dict(event_id=None, start_ts=None, maintenance=rs['maintenance'])
+            self.pipeline = self._empty_pipeline(maintenance=rs['maintenance'])
         else:
             logger.error("Pipeline failed — all retries exhausted or cap reached; declaring transition failed")
             self._declare_transition_failed()
@@ -469,7 +477,7 @@ class Logic:
         self.GAUGE.labels(resource="transition").set(3)
         self.TRANSITION_GAUGE.labels(release=release).set(3)
         self.TRANSITION_FAILED.labels(release=release).inc()
-        self.pipeline = dict(event_id=None, start_ts=None, maintenance=False)
+        self.pipeline = self._empty_pipeline()
         self.retry_state = None
         self.transition_failed = True
 
@@ -483,13 +491,30 @@ class Logic:
         self.TRANSITION_GAUGE.labels(release=release).set(0)
 
     def _maybe_retry(self):
+        now = self._now()
         rs = self.retry_state
+
+        if (self.pipeline['event_id'] is not None
+                and not self.pipeline.get('cancelling')
+                and self.pipeline.get('start_ts') is not None):
+            attempt_timeout = config.get('pipeline_attempt_timeout_seconds')
+            elapsed = (now - self.pipeline['start_ts']).total_seconds()
+            if elapsed >= attempt_timeout:
+                if self.pipeline.get('name'):
+                    self._cancel_timed_out_pipeline()
+                else:
+                    logger.warning(
+                        "Pipeline attempt exceeded timeout but run name not yet known — deferring cancel")
+                return
+
+        if self.pipeline.get('cancelling'):
+            return
+
         if rs is None or rs.get('retry_at') is None:
             return
         if self.pipeline['event_id'] is not None:
             return
 
-        now = self._now()
         cap_seconds = config.get('pipeline_retry_total_cap_seconds')
         cap_elapsed = (now - rs['transition_started_ts']).total_seconds() >= cap_seconds
 
@@ -501,6 +526,16 @@ class Logic:
         if now >= rs['retry_at']:
             self._fire_retry(rs)
 
+    def _cancel_timed_out_pipeline(self):
+        from clients.tekton import cancel_pipeline_run
+        name = self.pipeline['name']
+        release = self._transition_release()
+        logger.warning("Pipeline attempt timed out after %ss — cancelling %s",
+                       config.get('pipeline_attempt_timeout_seconds'), name)
+        self.PIPELINE.labels(release=release, state="Timeout").inc()
+        cancel_pipeline_run(name, config.get('py_env'))
+        self.pipeline['cancelling'] = True
+
     def _fire_retry(self, rs: dict):
         from transitions.retry import retry_deploy
         rs['attempts_made'] += 1
@@ -511,7 +546,9 @@ class Logic:
         rs['event_id'] = new_event_id
         self.pipeline = dict(event_id=new_event_id,
                              start_ts=self._now(),
-                             maintenance=rs['maintenance'])
+                             maintenance=rs['maintenance'],
+                             name=None,
+                             cancelling=False)
 
     def _transition_release(self):
         if self.retry_state and self.retry_state.get('release'):
@@ -522,7 +559,13 @@ class Logic:
         self.triggers.clear()
 
     def set_pipeline(self, pipeline: dict):
-        self.pipeline = pipeline
+        self.pipeline = dict(
+            event_id=pipeline['event_id'],
+            start_ts=pipeline['start_ts'],
+            maintenance=pipeline['maintenance'],
+            name=pipeline.get('name'),
+            cancelling=False,
+        )
         self.retry_state = dict(
             event_id=pipeline['event_id'],
             transition_started_ts=pipeline['start_ts'],
