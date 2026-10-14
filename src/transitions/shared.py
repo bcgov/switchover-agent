@@ -1,4 +1,5 @@
 import logging
+import os
 from config import config
 from clients.kube import scale, update_configmap, update_pdb
 from clients.kube import restart_deployment, patch_secret
@@ -8,6 +9,9 @@ from prometheus_client import Gauge, Counter, Enum
 
 logger = logging.getLogger(__name__)
 
+# prometheus_client 0.12 has no livemax. Each process would otherwise export its
+# own series, so a worker left at 1 keeps the alert on after maintenance is off.
+# Workers only write the state file. The metrics process publishes that value.
 MAINT = Gauge('switchover_maintenance', 'Switchover Maintenance Indicator')
 
 
@@ -28,7 +32,7 @@ def maintenance_on():
 
     logger.debug("MAINTENANCE ON - OK")
 
-    MAINT.set(1)
+    write_maintenance_state(1)
 
 
 def maintenance_off(py_env_ignored: str):
@@ -48,7 +52,33 @@ def maintenance_off(py_env_ignored: str):
 
     logger.debug("MAINTENANCE OFF - OK")
 
-    MAINT.set(0)
+    write_maintenance_state(0)
+
+
+def maintenance_state_path():
+    directory = os.environ.get('PROMETHEUS_MULTIPROC_DIR', '/tmp')
+    return os.path.join(directory, 'switchover_maintenance_state')
+
+
+def write_maintenance_state(value):
+    path = maintenance_state_path()
+    temporary = path + '.tmp'
+    with open(temporary, 'w') as state_file:
+        state_file.write(str(int(value)))
+    os.replace(temporary, path)
+
+
+def read_maintenance_state():
+    try:
+        with open(maintenance_state_path()) as state_file:
+            return float(state_file.read().strip() or 0)
+    except (OSError, ValueError):
+        return 0.0
+
+
+def publish_maintenance_gauge():
+    MAINT.set(read_maintenance_state())
+
 
 def scale_health_api(namespace: str, deployment_name: str, replicas: int, py_env: str):
     scale(namespace, 'deployment', deployment_name, replicas, py_env)
