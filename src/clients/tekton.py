@@ -22,13 +22,17 @@ def trigger_tekton_build(tekton_url: str, github_repo: str, github_ref: str, hma
     }
 
     payload = json.dumps(base_template)
+    body = payload.encode()
+    secret = hmac_secret.encode()
 
     headers = CaseInsensitiveDict()
     headers["Accept"] = "application/json"
     headers["Content-Type"] = "application/json"
     headers["X-GitHub-Event"] = "push"
-    headers["X-Hub-Signature"] = sign_request(
-        hmac_secret.encode(), payload.encode())
+    headers["X-Hub-Signature"] = sign_request(secret, body)
+    # Tekton's GitHub interceptor requires SHA-256. SHA-1 alone is rejected
+    # and the EventListener still returns 202 with no PipelineRun.
+    headers["X-Hub-Signature-256"] = sign_request_sha256(secret, body)
 
     r = requests.post(tekton_url, headers=headers,
                       data=payload)
@@ -39,11 +43,22 @@ def trigger_tekton_build(tekton_url: str, github_repo: str, github_ref: str, hma
 
 def sign_request(key, bytedata):
     from hashlib import sha1
+
+    return _hub_signature(key, bytedata, sha1, "sha1")
+
+
+def sign_request_sha256(key, bytedata):
+    from hashlib import sha256
+
+    return _hub_signature(key, bytedata, sha256, "sha256")
+
+
+def _hub_signature(key, bytedata, digestmod, prefix):
     import hmac
 
-    hashed = hmac.new(key, bytedata, sha1)
+    hashed = hmac.new(key, bytedata, digestmod)
 
-    return "sha1=%s" % hashed.hexdigest()
+    return "%s=%s" % (prefix, hashed.hexdigest())
 
 
 def cancel_pipeline_run(name: str, py_env: str):
