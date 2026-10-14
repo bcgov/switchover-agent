@@ -28,7 +28,7 @@ from clients.prom import prom_server
 from clients.tick import tick_producer
 from clients.patroni import patroni_worker, set_readonly_cluster, set_primary_cluster, set_standby_cluster
 from transitions.initiate_down import rollback_active_down
-from transitions.shared import maintenance_off, maintenance_on
+from transitions.shared import maintenance_off, maintenance_on, publish_maintenance_gauge
 from peers.server import peer_server
 from peers.client import peer_client
 from peers.client_fwd import peer_client_fwd
@@ -46,6 +46,7 @@ app = FastAPI()
 
 @app.get("/metrics")
 def prom_metrics():
+    publish_maintenance_gauge()
     return Response(content=generate_latest(registry), media_type="text/plain")
 
 
