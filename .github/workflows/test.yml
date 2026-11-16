@@ -4,6 +4,9 @@ on:
   push:
     branches: [dev, get-tests-working-again]
 
+permissions:
+  contents: read
+
 jobs:
   run-tests:
     runs-on: ubuntu-latest
