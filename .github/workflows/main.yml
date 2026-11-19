@@ -70,5 +70,3 @@ jobs:
           file: Dockerfile
           tags: ${{ env.REGISTRY }}/bcgov/switchover-agent:${{ steps.release.outputs.tag_name }}
           push: true
-          build-args: |
-            GITHUB_API_TOKEN=${{ secrets.CONTAINER_REGISTRY_PASSWORD }}
